@@ -2,6 +2,10 @@
 
 *Audit réalisé le 15 octobre 2026, à partir du code réel du projet. Aucun fichier n'a été modifié.*
 
+> **Mise à jour du 15 octobre 2026 (après corrections) :** 9 problèmes sur 10 sont corrigés, vérifiés et publiés.
+> Le détail, les nouvelles notes et les leçons retenues sont dans la [section 6 : Suivi des corrections](#6-suivi-des-corrections).
+> Les sections 1 à 5 sont conservées telles qu'elles ont été écrites, pour garder la trace du point de départ.
+
 ---
 
 ## 1. Vue d'ensemble
@@ -229,6 +233,8 @@ ATLAS affiche sur une carte de France les **87 811 biens immobiliers mis aux enc
 - **Le concept à retenir :** **n'envoie que ce qui sert.** Tout ce qui est envoyé au navigateur coûte du temps et de la mémoire au visiteur.
 - **Difficulté :** moyenne (il faudra aussi adapter l'export CSV et les tests).
 
+> *Correction après mesure :* « trois à quatre fois trop lourd » était exagéré. Une fois les répétitions retirées, le fichier est passé de 54 à 37 Mo, soit un tiers en moins (voir section 6).
+
 ---
 
 ### Problème 8 — Le code est très difficile à lire pour un humain
@@ -337,3 +343,63 @@ Tous les calculs (filtrer, compter, classer) sont rangés dans [app/stats.mjs](a
 | 7 | Rendre le code plus lisible, petit à petit | n°8 | Moyenne | À faire progressivement, à chaque fois qu'on touche une partie du code. |
 
 **Règle d'or pour chaque étape :** commit → modification → relancer les tests → vérifier la carte → commit.
+
+---
+
+## 6. Suivi des corrections
+
+*Toutes les corrections ont été faites le 15 octobre 2026. Chacune a été testée, sauvegardée avec Git, envoyée sur GitHub (`ATLAS-ENCHERES`), puis publiée sur https://atlas-licitor.vercel.app.*
+
+### Ce qui a été fait
+
+| Problème | Correction | Sauvegarde Git | Comment on a vérifié |
+|---|---|---|---|
+| **n°1** Aucune sauvegarde | Premier commit, dépôt GitHub public `ATLAS-ENCHERES`, `.gitignore` commenté. La base `archive_walk.sqlite` (202 Mo, trop lourde pour GitHub) est copiée dans iCloud Drive → « Sauvegardes ATLAS ». | `afd3686` | Recherche de secrets : aucun. Empreinte identique entre la base et sa copie iCloud. |
+| **n°2** Deux copies du code | `app/` est la seule version du code. `scripts/publish_vercel.py` fabrique automatiquement la copie en ligne. | `bff5906` | Le script a refabriqué à l'identique la copie qui était déjà en ligne. |
+| **n°5** Légende définie deux fois | La légende est calculée à partir des seuils de couleur `CHORO`. | `c2681f6` | Même texte qu'avant, vérifié caractère par caractère. |
+| **n°6** Calcul fait trois fois | Groupes de communes calculés une seule fois. | `c2681f6` | Tests + contrôle visuel des 3 modes de carte. |
+| **n°9** Message d'erreur inadapté | Le message dépend de l'endroit : le Mac ou le site public. | `c2681f6` | Relecture + contrôle visuel. |
+| **n°10** `requirements.txt` faux | Le fichier indique qu'aucun outil n'est à installer. | `c2681f6` | — |
+| **n°3** Serveurs gratuits non autorisés | Fond de carte **OpenFreeMap « Positron »** (gratuit, sans compte ni clé, autorisé pour un site public). Le style est gardé dans `app/vendor/`. | `e6c203f` | Contrôle visuel. Plus aucune trace des anciens serveurs dans le code. |
+| **n°4** Chiffres écrits en dur | Date de collecte lue dans `FINAL_RESULT.json`. Limite des années calculée. Contrôles valables pour toute collecte. La méthodologie lit la période, la date et le nombre de juridictions dans les données. | `b54a985` | Données refabriquées identiques. Texte de la méthodologie identique mot pour mot. |
+| **n°7** Données trop lourdes | Répétitions stockées une seule fois. Cases oui/non écrites seulement si « oui ». Tableau des tests sorti du fichier envoyé au navigateur. Export CSV déplacé dans `stats.mjs` et testé. **54 Mo → 37 Mo.** | `49bcce7` | Export CSV complet (87 811 lignes) **identique à l'octet près**. Données en ligne identiques à celles du Mac. |
+| **n°8** Code difficile à lire | **Non traité en bloc**, volontairement. Chaque correction a ajouté des commentaires en français. Le reste sera aéré au fil des prochaines modifications. | — | — |
+
+### Les nouvelles notes
+
+| Critère | Avant | Après | Pourquoi |
+|---|---|---|---|
+| **Sécurité** | 8/10 | 9/10 | Plus de dépendance à des services non autorisés. Le `.gitignore` bloque les fichiers de secrets par précaution. |
+| **Fiabilité** | 6/10 | 8/10 | Historique Git sur le Mac et sur GitHub, copie iCloud de la base brute, une seule version du code, export CSV testé. |
+| **Lisibilité** | 4/10 | 5/10 | Commentaires ajoutés à chaque correction, mais `app.mjs` reste très tassé. |
+| **Performance** | 6/10 | 7/10 | 17 Mo de moins à lire pour le navigateur, calcul en triple supprimé. |
+| **Maintenabilité** | 4/10 | 7/10 | Plus de chiffres en dur dans la préparation, publication automatisée, légende calculée. |
+
+### Ce qu'il reste à faire
+
+1. **Lisibilité (n°8)** : aérer `app/app.mjs` partie par partie, à chaque fois qu'on y touche pour une autre raison.
+2. **Titre de la page** : « BASE DOCUMENTAIRE 1999–2026 » est écrit à la main dans `app/index.html`. Il faudra le changer si une nouvelle collecte modifie les années.
+3. **Deuxième copie de la base brute** : copier aussi « Sauvegardes ATLAS » sur un disque externe le jour où il y en aura un.
+4. **Ancienne copie `hosting/atlas-licitor/`** (hébergement ChatGPT) : elle n'est plus mise à jour. La garder ou la supprimer.
+5. **Tests dans un navigateur** : `tests/browser.mjs` demande l'outil Playwright, qui n'est pas installé. Les contrôles visuels ont été faits à la main.
+
+### La routine de travail
+
+```
+1. git commit                               sauvegarde de départ
+2. Modifier app/                            la seule version du code
+3. python3 -m unittest discover -s tests    tests des données
+   node tests/stats.test.mjs                tests des filtres et de l'export
+4. Vérifier à l'œil (Lancer-ATLAS.command)
+5. git commit + git push                    sauvegarde sur le Mac et sur GitHub
+6. python3 scripts/publish_vercel.py        fabrique la copie en ligne
+7. commit + push dans hosting/atlas-vercel  Vercel publie tout seul
+```
+
+### Les leçons à retenir
+
+- **Sauvegarde avant de modifier** : un commit est un bouton « annuler » géant.
+- **Une seule source de vérité** : les copies sont fabriquées automatiquement, jamais modifiées à la main.
+- **Calcule au lieu d'écrire en dur** : si une valeur peut changer, elle doit être lue ou calculée.
+- **Prouve que rien n'a changé** : enregistre le résultat avant, refais-le après, compare.
+- **Mesure avant d'affirmer** : l'estimation « 3 à 4 fois trop lourd » s'est révélée fausse une fois mesurée.
