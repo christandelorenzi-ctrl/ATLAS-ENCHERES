@@ -187,9 +187,9 @@ function initMap(){
 
 function updateSources(){
   popup?.remove();
-  map.getSource('heat').setData(groupedPoints(current,['commune']));
-  map.getSource('points').setData(groupedPoints(current,['commune']));
-  map.getSource('approx').setData(groupedPoints(current,['commune']));
+  // Les trois sources affichent les mêmes groupes de communes : on les calcule une seule fois.
+  const grouped=groupedPoints(current,['commune']);
+  for(const id of ['heat','points','approx'])map.getSource(id).setData(grouped);
   departments.features.forEach(feature=>map.setFeatureState({source:'departments',id:feature.id},{count:summary.deps[feature.properties.code]||0}));
   renderLegend();
 }
@@ -213,7 +213,8 @@ function renderLegend(){
     $('legend').innerHTML=`<strong>Entrées regroupées par proximité</strong><div class="legend-item"><span class="legend-circle"></span> Groupe de communes · nombre d’entrées</div><div class="legend-item"><span class="legend-circle approx"></span> ≈ Centre de commune, emplacement approximatif</div><p>${num(summary.precision.commune)} entrées incluses.<br>Aucun point ne représente une adresse exacte.</p>`;
     $('map-note').textContent='Cliquez sur un groupe pour zoomer, puis sur un emplacement pour lire les entrées.';
   }else{
-    const labels=['0','1–49','50–149','150–299','300–599','600–1 199','≥ 1 200'];
+    // Textes de la légende fabriqués à partir des seuils de couleur (CHORO), pour qu'ils restent toujours d'accord.
+    const labels=CHORO.map((n,i)=>i===0?'0':i===CHORO.length-1?`≥ ${num(n)}`:`${num(n)}–${num(CHORO[i+1]-1)}`);
     $('legend').innerHTML=`<strong>Nombre d’entrées par département</strong>${labels.map((label,i)=>`<div class="legend-item"><span class="swatch" style="background:${colors[i]}"></span>${label} entrées</div>`).join('')}<p>Seuils fixes, identiques pour tous les filtres.<br>La part est calculée sur les ${num(summary.total)} entrées sélectionnées.</p>`;
     $('map-note').textContent=`Toutes les entrées au département identifié sont comptées, quelle que soit leur précision. ${num(summary.unknownDep)} non attribuées.`;
   }
@@ -330,5 +331,9 @@ try{
   initMap();
 }catch(error){
   console.error(error);$('loading').hidden=true;$('map-error').hidden=false;
-  $('map-error').textContent=`Chargement impossible : ${error.message}. Lancez python3 scripts/serve.py depuis le projet et ouvrez l’adresse locale indiquée.`;
+  // La consigne technique n'a de sens que sur le Mac ; un visiteur du site public doit seulement réessayer.
+  const local=location.hostname==='127.0.0.1'||location.hostname==='localhost';
+  $('map-error').textContent=`Chargement impossible : ${error.message}. `+(local
+    ?'Lancez python3 scripts/serve.py depuis le projet et ouvrez l’adresse locale indiquée.'
+    :'Vérifiez votre connexion Internet puis rechargez la page.');
 }

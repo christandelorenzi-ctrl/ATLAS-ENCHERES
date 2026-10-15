@@ -1,1 +1,3 @@
-pandas>=2.2,<4
+# ATLAS n'a besoin d'aucun outil à installer : Python 3.9+ et sa bibliothèque standard suffisent.
+# Seul l'ancien script scripts/prepare.py (base archivée, non utilisée) demandait pandas :
+#   pandas>=2.2,<4
