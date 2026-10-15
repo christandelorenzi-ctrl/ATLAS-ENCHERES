@@ -1,0 +1,131 @@
+{
+  "checked_at": "2026-10-13T15:43:48.182609+00:00",
+  "court_count": 167,
+  "court_sum": 87337,
+  "geographic_history": 32154,
+  "geographic_upcoming": 474,
+  "geographic_index_pages": 6530,
+  "first_last_entries_checked": 108,
+  "checked_entry_localities_present": 108,
+  "individual_all_records_downloaded": false,
+  "geocoding_performed": false,
+  "zones": [
+    {
+      "kind": "historique",
+      "label": "Paris et Ile de France",
+      "count": 17098,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/paris-et-ile-de-france/historique-des-adjudications.html",
+      "pagination_total": 17098,
+      "pages": 3420,
+      "first_last_entries_checked": 8
+    },
+    {
+      "kind": "historique",
+      "label": "Régions du Nord-Est",
+      "count": 1313,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/regions-du-nord-est/historique-des-adjudications.html",
+      "pagination_total": 1313,
+      "pages": 263,
+      "first_last_entries_checked": 8
+    },
+    {
+      "kind": "historique",
+      "label": "Bretagne, Grand Ouest",
+      "count": 733,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/bretagne-grand-ouest/historique-des-adjudications.html",
+      "pagination_total": 733,
+      "pages": 147,
+      "first_last_entries_checked": 8
+    },
+    {
+      "kind": "historique",
+      "label": "Centre, Loire, Limousin",
+      "count": 235,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/centre-loire-limousin/historique-des-adjudications.html",
+      "pagination_total": 235,
+      "pages": 47,
+      "first_last_entries_checked": 10
+    },
+    {
+      "kind": "historique",
+      "label": "Sud-Ouest, Pyrénées",
+      "count": 1795,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/sud-ouest-pyrenees/historique-des-adjudications.html",
+      "pagination_total": 1795,
+      "pages": 359,
+      "first_last_entries_checked": 10
+    },
+    {
+      "kind": "historique",
+      "label": "Sud-Est, Méditerrannée",
+      "count": 10966,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/sud-est-mediterrannee/historique-des-adjudications.html",
+      "pagination_total": 10966,
+      "pages": 2194,
+      "first_last_entries_checked": 6
+    },
+    {
+      "kind": "historique",
+      "label": "Outre Mer",
+      "count": 14,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/outre-mer/historique-des-adjudications.html",
+      "pagination_total": 14,
+      "pages": 3,
+      "first_last_entries_checked": 9
+    },
+    {
+      "kind": "a_venir",
+      "label": "Paris et Ile de France",
+      "count": 130,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/paris-et-ile-de-france/prochaines-ventes.html",
+      "pagination_total": 130,
+      "pages": 26,
+      "first_last_entries_checked": 10
+    },
+    {
+      "kind": "a_venir",
+      "label": "Régions du Nord-Est",
+      "count": 62,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/regions-du-nord-est/prochaines-ventes.html",
+      "pagination_total": 62,
+      "pages": 13,
+      "first_last_entries_checked": 7
+    },
+    {
+      "kind": "a_venir",
+      "label": "Bretagne, Grand Ouest",
+      "count": 37,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/bretagne-grand-ouest/prochaines-ventes.html",
+      "pagination_total": 37,
+      "pages": 8,
+      "first_last_entries_checked": 7
+    },
+    {
+      "kind": "a_venir",
+      "label": "Centre, Loire, Limousin",
+      "count": 39,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/centre-loire-limousin/prochaines-ventes.html",
+      "pagination_total": 39,
+      "pages": 8,
+      "first_last_entries_checked": 9
+    },
+    {
+      "kind": "a_venir",
+      "label": "Sud-Ouest, Pyrénées",
+      "count": 53,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/sud-ouest-pyrenees/prochaines-ventes.html",
+      "pagination_total": 53,
+      "pages": 11,
+      "first_last_entries_checked": 8
+    },
+    {
+      "kind": "a_venir",
+      "label": "Sud-Est, Méditerrannée",
+      "count": 153,
+      "url": "https://www.licitor.com/ventes-aux-encheres-immobilieres/sud-est-mediterrannee/prochaines-ventes.html",
+      "pagination_total": 153,
+      "pages": 31,
+      "first_last_entries_checked": 8
+    }
+  ]
+}

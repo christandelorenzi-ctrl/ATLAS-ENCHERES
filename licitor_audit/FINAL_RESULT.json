@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-10-13T22:20:04.231755+00:00",
+  "states": {
+    "done": 29475
+  },
+  "unique_ads": 80591,
+  "commune_resolved": 78367,
+  "historical_name_matches": 824,
+  "not_resolved": 2224,
+  "immaterial_assets": 112,
+  "physically_mappable_lower_bound": 78272,
+  "traversal_finished": true,
+  "lot_census": {
+    "entrees_audiences": 87811,
+    "historique": 87337,
+    "a_venir": 474,
+    "identifiants_annonces": 80591,
+    "communes_resolues": 85332,
+    "non_resolues": 2479,
+    "actifs_immateriels": 117,
+    "entrees_immobilieres_localisables_commune": 85232,
+    "juridictions": 167,
+    "juridictions_compteurs_exacts": 167,
+    "note": "Une entrée est une ligne de bien/lot publiée dans une audience. Ni unicité du bien physique ni transaction réalisée ne sont établies."
+  }
+}

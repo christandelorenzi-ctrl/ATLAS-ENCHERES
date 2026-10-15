@@ -1,0 +1,13 @@
+{
+  "entrees_audiences": 87811,
+  "historique": 87337,
+  "a_venir": 474,
+  "identifiants_annonces": 80591,
+  "communes_resolues": 85332,
+  "non_resolues": 2479,
+  "actifs_immateriels": 117,
+  "entrees_immobilieres_localisables_commune": 85232,
+  "juridictions": 167,
+  "juridictions_compteurs_exacts": 167,
+  "note": "Une entrée est une ligne de bien/lot publiée dans une audience. Ni unicité du bien physique ni transaction réalisée ne sont établies."
+}

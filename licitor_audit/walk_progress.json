@@ -1,0 +1,14 @@
+{
+  "updated_at": "2026-10-13T22:16:44.492785+00:00",
+  "states": {
+    "done": 29475
+  },
+  "unique_ads": 80591,
+  "locality_matched": 77544,
+  "network_pages_this_run": 9034,
+  "complete": true,
+  "stop_reason": "",
+  "unit": "annonce identifiée par URL, pas bien physique unique",
+  "individual_property_pages_read": false,
+  "geocoding_service_used": false
+}

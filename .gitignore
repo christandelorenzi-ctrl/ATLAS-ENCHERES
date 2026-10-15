@@ -1,0 +1,22 @@
+# --- Fichiers du système ---
+.DS_Store
+__pycache__/
+
+# --- Fichiers refabricables ---
+app/data/
+data/cache/
+reports/screenshots/
+hosting/atlas-licitor-release.tar.gz
+
+# --- À sauvegarder ailleurs ---
+licitor_audit/archive_walk.sqlite*
+
+# --- Projets qui ont leur propre Git ---
+hosting/atlas-vercel/
+hosting/atlas-licitor/
+
+# --- Secrets (précaution) ---
+.env*
+.vercel/
+*.pem
+*.key

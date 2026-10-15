@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ATLAS — Cartographie des annonces d’enchères immobilières en France</title>
+  <meta name="description" content="Atlas statistique des annonces immobilières de la base étudiée, 1999–2026. Application locale, source Licitor et précision communale documentée.">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css"><link rel="stylesheet" href="style.css">
+  <script defer src="vendor/maplibre-gl.js"></script><script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">A</span><div><h1><strong>ATLAS</strong><span> — Cartographie des annonces d’enchères immobilières en France</span></h1><p>OBSERVATOIRE DES ANNONCES · LICITOR · BASE DOCUMENTAIRE 1999–2026</p></div></div>
+    <nav><button id="methodology" class="text-button">Méthodologie ↗</button><button id="export" class="outline-button" disabled>Exporter la sélection ↓</button></nav>
+  </header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">EXPLORER LA BASE ÉTUDIÉE</p><h2>Lire les concentrations, explorer les territoires.</h2></div></section>
+    <section class="filters" aria-label="Filtres des annonces">
+      <div class="period"><label for="from">Période</label><div><select id="from" aria-label="Année de début"></select><span>→</span><select id="to" aria-label="Année de fin"></select></div></div>
+      <div><label for="category">Catégorie de bien</label><select id="category"><option value="">Toutes les catégories</option></select></div>
+      <div><label for="department">Département</label><select id="department"><option value="">Tous les départements</option></select></div>
+      <div class="search"><label for="search">Commune ou département</label><input id="search" type="search" list="town-list" placeholder="Nom ou code géographique…" autocomplete="off"><datalist id="town-list"></datalist></div>
+      <button id="reset" class="reset-button" title="Réinitialiser les filtres">↺ <span>Réinitialiser</span></button>
+    </section>
+    <section class="metrics" aria-label="Indicateurs de la sélection" aria-live="polite">
+      <article><p>Entrées sélectionnées</p><strong id="total">—</strong><small id="period-label">Chargement de la base réelle</small></article>
+      <article><p>Départements représentés</p><strong id="dep-count">—</strong></article>
+      <article class="leader"><p>Premier département observé</p><strong id="leader">—</strong><small id="leader-detail">Nombre d’entrées dans la sélection</small></article>
+    </section>
+    <section class="workspace">
+      <div class="map-panel">
+        <div class="map-toolbar"><div role="group" aria-label="Mode cartographique" class="mode-control"><button data-mode="heat" aria-pressed="true">◉ Chaleur</button><button data-mode="points" aria-pressed="false">⠿ Points regroupés</button><button data-mode="departments" aria-pressed="false">▱ Départements</button></div><span id="map-scope">France métropolitaine</span></div>
+        <div id="map" aria-label="Carte interactive des annonces immobilières"></div>
+        <div class="map-actions"><button id="home" title="Revenir à la France métropolitaine">⌂ France</button><select id="overseas" aria-label="Naviguer vers l’outre-mer"><option value="">Outre-mer ↗</option></select></div>
+        <div id="loading" role="status"><span class="spinner"></span>Préparation de la carte…</div>
+        <div id="map-error" role="alert" hidden></div>
+        <div class="legend" id="legend"></div>
+        <div class="map-note" id="map-note"></div>
+      </div>
+      <aside class="ranking-panel">
+        <div class="ranking-heading"><p class="eyebrow">LES TERRITOIRES LES PLUS REPRÉSENTÉS</p><h3>Classement des entrées</h3><p id="ranking-subtitle">Top 10 · sélection active</p></div>
+        <div class="ranking-tabs" role="group" aria-label="Type de classement"><button id="rank-dep" aria-pressed="true">Départements</button><button id="rank-town" aria-pressed="false">Communes</button></div>
+        <ol id="ranking"></ol>
+      </aside>
+    </section>
+    <section class="timeline"><div class="timeline-heading"><h3>Répartition annuelle des entrées</h3><p>Volumes observés · cliquer sur une année pour la sélectionner</p></div><div id="year-chart" aria-label="Nombre d’entrées par année"></div><p class="timeline-note">2026 est partielle et comprend des audiences à venir. Une date atypique est conservée hors du graphique annuel.</p></section>
+    <section class="annual-curve" aria-labelledby="curve-title">
+      <div class="curve-heading"><div><h3 id="curve-title">Évolution annuelle des biens/lots annoncés aux enchères</h3><p id="curve-scope">Base Licitor · France entière · 1999–2026</p></div><p class="curve-key"><span></span>Nombre d’entrées par année <span class="partial"></span>2026 : année partielle</p></div>
+      <div id="annual-chart" class="curve-scroll"></div>
+      <p class="curve-note" id="curve-note">Un point par année. Survolez ou sélectionnez un point pour lire son effectif ; cliquez pour filtrer la carte sur cette année.</p>
+    </section>
+    <footer><p>Les résultats représentent les enregistrements présents dans la base étudiée. Leur distribution dépend de la couverture temporelle, géographique et documentaire de cette base.</p><span id="performance">Données réelles · traitement local</span></footer>
+  </main>
+  <dialog id="method-dialog"><div class="dialog-header"><div><p class="eyebrow">TRANSPARENCE & REPRODUCTIBILITÉ</p><h2>Méthodologie et qualité des données</h2></div><button id="close-dialog" aria-label="Fermer la méthodologie">×</button></div><div id="method-content"></div></dialog>
+</body></html>

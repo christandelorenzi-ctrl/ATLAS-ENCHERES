@@ -1,0 +1,14 @@
+HTTP/2 200 
+date: Fri, 09 Oct 2026 21:27:17 GMT
+content-type: text/plain; charset=utf-8
+content-length: 2676
+location: https://encheres-publiques.com/robots.txt
+server: cloudflare
+strict-transport-security: max-age=31536000
+cache-control: max-age=14400
+cf-cache-status: EXPIRED
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=OuQs2UEMcSWz6W%2FbljNAG%2FAeVTOP%2Fx0Dd2stmiE3kMORKhyKIMBAocb5gdVaBg3l5EXB8CizjkbrNwqRv5ppogCULmUOaTefjlGDZotKYz1Jm7cEExRj8%2Br2Wgx0qJWy3kSO4uptiXgXPD%2FfKjdrjCIJtLu6OCi1%2Bg%3D%3D"}]}
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+cf-ray: a48077eebcd3e22f-MRS
+alt-svc: h3=":443"; ma=86400
+
