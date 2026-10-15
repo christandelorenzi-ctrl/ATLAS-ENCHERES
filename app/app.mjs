@@ -333,11 +333,13 @@ function renderSheet(){
   $('sheet-title').textContent=name;
   $('sheet-scope').textContent=`${f.from}–${f.to} · ${f.category?data.categories[f.category]:'toutes catégories'} · ${num(s.population)} habitants. La période et la catégorie choisies s’appliquent à la fiche.`;
   const ratio=s.rate!==null&&s.franceRate?s.rate/s.franceRate:null;
+  // Petite commune : le taux est affiché mais signalé comme fragile (voir la méthodologie).
+  const fragile=!isDep&&s.population<MIN_TOWN_POPULATION?`<small class="sheet-warning">⚠ Peu fiable : moins de ${num(MIN_TOWN_POPULATION)} habitants</small>`:'';
   const rankText=s.rank?`<strong>${ordinal(s.rank)}</strong><small>sur ${num(s.rankOf)} ${isDep?'départements':`communes de ${num(MIN_TOWN_POPULATION)} hab. et plus`}</small>`
     :`<strong>—</strong><small>${isDep?'non classé : aucune entrée dans la base Licitor':`non classée : moins de ${num(MIN_TOWN_POPULATION)} habitants`}</small>`;
   const tiles=`<section class="sheet-tiles" aria-label="Chiffres clés">
     <article><p>Entrées</p><strong>${num(s.count)}</strong><small>sur la période choisie</small></article>
-    <article><p>Par an pour 10 000 hab.</p><strong>${s.rate===null?'—':fmtRate.format(s.rate)}</strong><small>France : ${s.franceRate===null?'—':fmtRate.format(s.franceRate)}${ratio?` · ×${fmtRatio.format(ratio)}`:''}</small></article>
+    <article><p>Par an pour 10 000 hab.</p><strong>${s.rate===null?'—':fmtRate.format(s.rate)}</strong><small>France : ${s.franceRate===null?'—':fmtRate.format(s.franceRate)}${ratio?` · ×${fmtRatio.format(ratio)}`:''}</small>${fragile}</article>
     <article><p>Rang national du taux</p>${rankText}</article></section>`;
   const partial=f.to===data.audit.max_year?` ${f.to} est partielle.`:'';
   const evolution=s.years.length<2
@@ -424,6 +426,14 @@ async function copyLink(button){
   setTimeout(()=>{button.textContent=label;},2000);
 }
 
+// Justification du seuil des petites communes, avec ses effets calculés sur la base.
+function smallTownsText(){
+  const small=new Set(Object.entries(data.communes).filter(([,c])=>c.population<MIN_TOWN_POPULATION).map(([code])=>code));
+  const entries=data.records.filter(r=>small.has(r.commune)).length;
+  const swing=rate(1,MIN_TOWN_POPULATION);  // effet d'une seule entrée sur une année, au seuil
+  return `<p><strong>Petites communes.</strong> Dans une commune de ${num(MIN_TOWN_POPULATION)} habitants, une seule entrée de plus sur une année change déjà le taux de ${fmtRate.format(swing)} pour 10 000 ; en dessous, quelques ventes isolées suffisent à produire un taux très élevé qui ne traduit pas une tendance. Le classement des communes écarte donc celles de moins de ${num(MIN_TOWN_POPULATION)} habitants : ${num(small.size)} des ${num(Object.keys(data.communes).length)} communes de la base, soit ${num(entries)} entrées (${pct(entries,data.audit.valid_rows)}), qui restent comptées dans les taux de leur département. Ce seuil est un choix de méthode, pas une norme officielle (l’INSEE retient par exemple 2 000 habitants pour définir une unité urbaine). Les fiches de ces communes affichent leur taux avec un avertissement.</p>`;
+}
+
 function renderMethod(pilot,anomalies){
   const a=data.audit;
   $('method-content').innerHTML=`
@@ -461,9 +471,17 @@ function renderMethod(pilot,anomalies){
     <p>Le bouton « Par an pour 10 000 hab. » rapporte le nombre d’entrées de la sélection à la population et à la durée de la période : <strong>taux annuel moyen = entrées de la période ÷ nombre d’années ÷ population × 10 000</strong>. Il permet de comparer des territoires de tailles différentes, et des périodes de durées différentes. La courbe des fiches donne le taux de chaque année.</p>
     <ul>
       <li>Population : ${esc(a.population_source)} (${num(a.population_total)} habitants au total). ${esc(a.population_note)} La population d’un département est la somme de celle de ses communes. Elle est la même pour toutes les années : un taux sur plusieurs années ne tient pas compte de l’évolution de la population.</li>
-      <li>Le classement des communes ne retient que celles d’au moins ${num(MIN_TOWN_POPULATION)} habitants : dans une très petite commune, une ou deux ventes suffisent à produire un taux très élevé mais peu significatif.</li>
+      <li>Le classement des communes ne retient que celles d’au moins ${num(MIN_TOWN_POPULATION)} habitants (voir « Petites communes » ci-dessous).</li>
       <li>Sur la carte des départements, les couleurs forment 6 groupes de même taille, recalculés pour chaque sélection : la légende indique les valeurs exactes. Les cartes « Chaleur » et « Points » restent en nombre d’entrées.</li>
     </ul>
+    <p><strong>Limites à connaître :</strong></p>
+    <ul>
+      <li><strong>Des lots, pas des ventes.</strong> Les taux comptent des entrées : ${num(a.valid_rows)} entrées pour ${num(a.unique_urls)} annonces, car une annonce peut regrouper plusieurs lots. Ils ne mesurent ni des ventes réalisées, ni des annonces distinctes.</li>
+      <li><strong>Une population fixe.</strong> La population ${a.population_year} sert pour toutes les années de ${a.min_year} à ${a.max_year}. Pour un territoire dont la population a beaucoup changé, les taux des premières années sont approximatifs.</li>
+      <li><strong>Une dernière année incomplète.</strong> ${a.max_year} est partielle : l’inclure dans la période fait baisser le taux annuel moyen.</li>
+      <li><strong>Des entrées non rattachées.</strong> ${num(a.without_department)} entrées sans département (${pct(a.without_department,a.valid_rows)}) sont exclues de tous les taux. ${num(a.without_commune-a.without_department)} entrées ont un département mais pas de commune : elles comptent pour leur département, pas pour une commune.</li>
+    </ul>
+    ${smallTownsText()}
     <h3>Sources et fonctionnement local</h3>
     <p><a href="https://www.licitor.com/historique-des-adjudications.html" target="_blank" rel="noopener">Archives publiques Licitor</a> ; <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">référentiel officiel des communes</a> ; contours départementaux Etalab 2024. Les listes d’audiences sont mises en cache ; les fiches individuelles ne sont pas toutes analysées. Aucun statut ou prix d’adjudication n’est déduit de la présence d’une entrée. Données et bibliothèque MapLibre locales, fond de carte OpenFreeMap (données OpenStreetMap) et polices en ligne, sans compte ni service payant. L’ancienne base est retirée de l’application active.</p>`;
 }

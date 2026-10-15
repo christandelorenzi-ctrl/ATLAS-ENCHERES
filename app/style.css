@@ -69,3 +69,4 @@ button.bar-row .bar-label{color:var(--teal)}
 @media(max-width:600px){.sheet{padding:18px 16px}.sheet-tiles{grid-template-columns:1fr 1fr}.sheet-tiles article:last-child{grid-column:span 2}}
 /* Impression / PDF : seule la fiche est imprimée, tableau des données compris. */
 @media print{body>*:not(#sheet){display:none!important}.sheet{position:static;width:auto;height:auto;overflow:visible;box-shadow:none;border:0;animation:none}.sheet-close,.sheet-actions,.sheet summary{display:none}}
+.sheet-tiles .sheet-warning{color:var(--ink);font-weight:600}
