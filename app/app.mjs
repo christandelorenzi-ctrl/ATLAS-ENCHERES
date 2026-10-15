@@ -1,4 +1,4 @@
-import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,CHORO} from './stats.mjs';
+import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,filtersToQuery,filtersFromQuery,CHORO} from './stats.mjs';
 const started=performance.now();
 const $=id=>document.getElementById(id);
 const fmt=new Intl.NumberFormat('fr-FR');
@@ -22,7 +22,22 @@ function populate(){
   const uniqueNames=[...new Set([...Object.values(data.communes).map(c=>c.name),...depKeys.map(code=>data.departments[code])])].sort((a,b)=>a.localeCompare(b,'fr'));
   uniqueNames.forEach(name=>$('town-list').append(new Option(name,name)));
   depKeys.filter(code=>code.length===3).forEach(code=>$('overseas').add(new Option(`${code} · ${data.departments[code]}`,code)));
-  $('export').disabled=false;
+  $('export').disabled=false;$('share').disabled=false;
+}
+
+// Lien partageable : à l'ouverture, on applique les filtres écrits dans l'adresse de la page…
+function applyQuery(){
+  const shared=filtersFromQuery(location.search,data);
+  Object.assign(f,shared.filters);
+  $('from').value=f.from;$('to').value=f.to;$('category').value=f.category;$('search').value=f.search;
+  $('department').value=f.dep;
+  if($('department').value!==f.dep)f.dep=$('department').value='';  // département sans aucune entrée
+  switchMode(shared.mode);
+}
+// … et à chaque changement, on réécrit l'adresse (sans ajouter d'étape au bouton « Précédent »).
+function syncQuery(){
+  const query=filtersToQuery(f,mode,data.audit);
+  history.replaceState(null,'',query?`?${query}`:location.pathname);
 }
 
 function update(){
@@ -40,6 +55,7 @@ function update(){
   if(ready) updateSources();
   $('performance').textContent=`Filtres calculés en ${Math.round(performance.now()-t)} ms · ${num(data.audit.valid_rows)} entrées Licitor`;
   window.atlasState={filters:{...f},summary,mode,filteredIds:current.map(r=>r.id),ready,basemapLoaded};
+  syncQuery();
 }
 
 function renderRanking(){
@@ -178,6 +194,8 @@ function initMap(){
       console.info('ATLAS premier affichage utile',window.atlasPerformance);
     });
     attachMapEvents();if(window.atlasState)window.atlasState.ready=true;
+    // Lien partagé : zoom sur le département ou la commune choisis.
+    if(f.dep)focusTerritory(f.dep,'dep');else if(f.search)focusSearch(f.search);
   });
   map.on('moveend',()=>{
     const c=map.getCenter();$('map-scope').textContent=c.lat>=41&&c.lat<=52&&c.lng>=-6&&c.lng<=10?'France métropolitaine':'Vue outre-mer / internationale';
@@ -202,7 +220,7 @@ function switchMode(next){
     for(const [id,visible] of Object.entries(visibility))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     popup?.remove();hover?.remove();renderLegend();
   }
-  if(window.atlasState)window.atlasState.mode=mode;
+  if(window.atlasState){window.atlasState.mode=mode;syncQuery();}
 }
 function renderLegend(){
   if(mode==='heat'){
@@ -288,6 +306,14 @@ function renderMethod(pilot,anomalies){
     <p><a href="https://www.licitor.com/historique-des-adjudications.html" target="_blank" rel="noopener">Archives publiques Licitor</a> ; <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">référentiel officiel des communes</a> ; contours départementaux Etalab 2024. Les listes d’audiences sont mises en cache ; les fiches individuelles ne sont pas toutes analysées. Aucun statut ou prix d’adjudication n’est déduit de la présence d’une entrée. Données et bibliothèque MapLibre locales, fond de carte OpenFreeMap (données OpenStreetMap) et polices en ligne, sans compte ni service payant. L’ancienne base est retirée de l’application active.</p>`;
 }
 
+// Zoome sur la commune ou le département dont le nom (ou le code) est tapé dans la recherche.
+function focusSearch(text){
+  const value=text.trim().toLocaleLowerCase('fr');
+  const towns=Object.entries(data.communes).filter(([code,c])=>c.name.toLocaleLowerCase('fr')===value||code===value);
+  if(towns.length===1)focusTerritory(towns[0][0],'town');
+  else if(!towns.length){const dep=Object.entries(data.departments).find(([code,name])=>name.toLocaleLowerCase('fr')===value||code.toLowerCase()===value);if(dep)focusTerritory(dep[0],'dep');}
+}
+
 function wire(){
   for(const id of ['from','to']) $(id).onchange=()=>{
     f.from=Number($('from').value);f.to=Number($('to').value);
@@ -297,11 +323,11 @@ function wire(){
   $('category').onchange=()=>{f.category=$('category').value;update();};
   $('department').onchange=()=>{f.dep=$('department').value;update();if(f.dep)focusTerritory(f.dep,'dep');};
   $('search').oninput=()=>{clearTimeout(queued);queued=setTimeout(()=>{f.search=$('search').value;update();},140);};
-  $('search').onchange=()=>{
-    const value=$('search').value.trim().toLocaleLowerCase('fr');
-    const towns=Object.entries(data.communes).filter(([code,c])=>c.name.toLocaleLowerCase('fr')===value||code===value);
-    if(towns.length===1)focusTerritory(towns[0][0],'town');
-    else if(!towns.length){const dep=Object.entries(data.departments).find(([code,name])=>name.toLocaleLowerCase('fr')===value||code.toLowerCase()===value);if(dep)focusTerritory(dep[0],'dep');}
+  $('search').onchange=()=>focusSearch($('search').value);
+  $('share').onclick=async()=>{
+    try{await navigator.clipboard.writeText(location.href);$('share').textContent='Lien copié ✓';}
+    catch{prompt('Copiez ce lien :',location.href);}  // presse-papiers refusé : on affiche le lien
+    setTimeout(()=>{$('share').textContent='Copier le lien ⧉';},2000);
   };
   $('reset').onclick=()=>{clearTimeout(queued);Object.assign(f,{from:data.audit.min_year,to:data.audit.max_year,category:'',dep:'',search:'',includeUndated:true});$('from').value=f.from;$('to').value=f.to;$('category').value=$('department').value=$('search').value='';update();$('annual-chart').scrollLeft=0;map?.flyTo({center:[2.7,46.55],zoom:4.8,duration:reduceMotion?0:700});};
   document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>switchMode(button.dataset.mode));
@@ -323,7 +349,7 @@ try{
   [data,departments]=loaded;
   // Version en ligne : les biens sont répartis en plusieurs fichiers (voir scripts/publish_vercel.py).
   if(data.recordChunks)data.records=(await Promise.all(data.recordChunks.map(name=>getJSON('data/'+name)))).flat();
-  populate();wire();renderMethod(loaded[2],loaded[3]);update();
+  populate();applyQuery();wire();renderMethod(loaded[2],loaded[3]);update();
   if(!window.maplibregl)throw Error('La bibliothèque locale MapLibre n’est pas disponible.');
   initMap();
 }catch(error){

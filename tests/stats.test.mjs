@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {selectRecords,summarize,groupedPoints,departmentClass,exportTable,EXPORT_HEADER} from '../app/stats.mjs';
+import {selectRecords,summarize,groupedPoints,departmentClass,exportTable,EXPORT_HEADER,filtersToQuery,filtersFromQuery} from '../app/stats.mjs';
 const data=JSON.parse(readFileSync(new URL('../app/data/atlas.json',import.meta.url)));
 const aggregates=JSON.parse(readFileSync(new URL('../reports/aggregates.json',import.meta.url)));
 const base={from:data.audit.min_year,to:data.audit.max_year,category:'',dep:'',search:'',includeUndated:true};
@@ -36,4 +36,21 @@ assert.equal(selectRecords(data.records,{...base,search:'93'},data.communes,data
 const table=exportTable(data.records,data);
 assert.equal(table.length,data.records.length+1);assert.ok(table.every(row=>row.length===EXPORT_HEADER.length));
 assert.ok(table.slice(1).every(row=>row[5].startsWith('https://www.licitor.com/annonce/')&&!row.includes(undefined)));
+// Lien partageable : écrire puis relire l'adresse redonne exactement les mêmes filtres.
+const {includeUndated,...defaults}=base;
+assert.equal(filtersToQuery(defaults,'heat',data.audit),'');
+assert.deepEqual(filtersFromQuery('',data),{mode:'heat',filters:defaults});
+for(const f of cases)for(const mode of ['heat','points','departments']){
+  const {includeUndated,...filters}=f;
+  assert.deepEqual(filtersFromQuery('?'+filtersToQuery(filters,mode,data.audit),data),{mode,filters});
+}
+// Adresses mal tapées ou trafiquées : chaque valeur impossible est ignorée.
+for(const bad of ['?debut=1800','?fin=3000','?debut=abc','?debut=2010.5','?categorie=chateaux','?categorie=constructor',
+  '?departement=99','?departement=__proto__','?mode=satellite','?debut=&fin=']){
+  const {filters,mode}=filtersFromQuery(bad,data);
+  assert.equal(mode,'heat',bad);assert.equal(filters.from,base.from,bad);assert.equal(filters.to,base.to,bad);
+  assert.equal(filters.category,'',bad);assert.equal(filters.dep,'',bad);
+}
+assert.deepEqual(filtersFromQuery('?debut=2020&fin=2010',data).filters.from,2010);  // années inversées : remises dans l'ordre
+assert.equal(filtersFromQuery('?recherche='+'x'.repeat(500),data).filters.search.length,100);
 console.log(`${cases.length} scénarios de filtres réels : comptages, cube, pondération des points et chaleur concordants.`);
