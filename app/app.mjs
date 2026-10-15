@@ -123,20 +123,19 @@ function focusTerritory(code,kind){
 }
 
 function initMap(){
-  // Raster basemap is free and anonymous. Library, records and contours are local.
+  // Fond de carte OpenFreeMap « Positron » : gratuit, sans clé, autorisé pour un site public.
+  // Le style est gardé dans vendor/ pour que les données s'affichent même sans Internet ;
+  // seuls les dessins du fond et les polices viennent de tiles.openfreemap.org.
   map=new maplibregl.Map({container:'map',center:[2.7,46.55],zoom:4.8,maxZoom:18,
-    style:{version:8,glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',sources:{
-      basemap:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,
-        attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',maxzoom:19}},
-      layers:[{id:'background',type:'background',paint:{'background-color':'#ecf2f3'}},
-              {id:'basemap',type:'raster',source:'basemap',paint:{'raster-opacity':['interpolate',['linear'],['zoom'],4,.38,12,.75],'raster-saturation':-1,'raster-contrast':-.15}}]},
+    style:'vendor/openfreemap-positron.json',
     attributionControl:{compact:true},fadeDuration:reduceMotion?0:150});
   window.atlasMap=map;
   map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
   map.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
-  map.on('sourcedata',e=>{if(e.sourceId==='basemap'&&e.isSourceLoaded){basemapLoaded=true;if(window.atlasState)window.atlasState.basemapLoaded=true;}});
+  const basemapSources=['openmaptiles','ne2_shaded'];
+  map.on('sourcedata',e=>{if(e.sourceId==='openmaptiles'&&e.isSourceLoaded){basemapLoaded=true;if(window.atlasState)window.atlasState.basemapLoaded=true;}});
   map.on('error',e=>{
-    if(e.error?.message?.includes('tile.openstreetmap')||e.sourceId==='basemap'){
+    if(e.error?.message?.includes('openfreemap')||basemapSources.includes(e.sourceId)){
       baseErrors++;if(baseErrors>2){$('map-error').hidden=false;$('map-error').textContent='Le fond de carte nécessite une connexion Internet. Les entrées et les contours restent disponibles localement.';}
     }else console.warn('MapLibre',e.error);
   });
@@ -286,7 +285,7 @@ function renderMethod(pilot,anomalies){
     </ul>
     <p>Les pourcentages sont calculés sur toutes les entrées sélectionnées. Les chiffres ne tiennent pas compte du nombre d’habitants et décrivent uniquement la base Licitor.</p>
     <h3>Sources et fonctionnement local</h3>
-    <p><a href="https://www.licitor.com/historique-des-adjudications.html" target="_blank" rel="noopener">Archives publiques Licitor</a> ; <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">référentiel officiel des communes</a> ; contours départementaux Etalab 2024. Les listes d’audiences sont mises en cache ; les fiches individuelles ne sont pas toutes analysées. Aucun statut ou prix d’adjudication n’est déduit de la présence d’une entrée. Données et bibliothèque MapLibre locales, fond OpenStreetMap et glyphes en ligne sans service payant obligatoire. L’ancienne base est retirée de l’application active.</p>`;
+    <p><a href="https://www.licitor.com/historique-des-adjudications.html" target="_blank" rel="noopener">Archives publiques Licitor</a> ; <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">référentiel officiel des communes</a> ; contours départementaux Etalab 2024. Les listes d’audiences sont mises en cache ; les fiches individuelles ne sont pas toutes analysées. Aucun statut ou prix d’adjudication n’est déduit de la présence d’une entrée. Données et bibliothèque MapLibre locales, fond de carte OpenFreeMap (données OpenStreetMap) et polices en ligne, sans compte ni service payant. L’ancienne base est retirée de l’application active.</p>`;
 }
 
 function wire(){

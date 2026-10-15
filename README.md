@@ -13,7 +13,8 @@ python3 scripts/serve.py
 
 Ouvrir http://127.0.0.1:8765/ et recharger la page si elle était déjà ouverte.
 Le serveur écoute uniquement sur ce Mac ; aucun compte ni service payant obligatoire.
-Le fond OpenStreetMap et les glyphes nécessitent Internet, les données et la bibliothèque
+Le fond de carte OpenFreeMap (données OpenStreetMap, style gardé dans `app/vendor/`) et les polices
+nécessitent Internet, les données et la bibliothèque
 MapLibre sont locales. Ctrl+C arrête le serveur.
 
 ## Base active
