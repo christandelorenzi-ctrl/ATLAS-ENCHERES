@@ -6,7 +6,7 @@ const num=x=>fmt.format(x);
 const pct=(n,d)=>d?(100*n/d).toLocaleString('fr-FR',{maximumFractionDigits:1})+' %':'—';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const colors=['#e7edef','#d0e8ec','#97cbd3','#58a9b8','#298394','#166176','#123f55'];
-const f={from:1999,to:2026,category:'',dep:'',search:'',includeUndated:true};
+const f={from:null,to:null,category:'',dep:'',search:'',includeUndated:true};  // période remplie par populate() à partir des données
 let data,departments,map,current,summary,mode='heat',rank='dep',popup,hover,ready=false,queued;
 let rendered=false,basemapLoaded=false,baseErrors=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -257,21 +257,21 @@ function renderMethod(pilot,anomalies){
   const a=data.audit;
   $('method-content').innerHTML=`
     <h3>Objectif</h3>
-    <p>ATLAS permet de visualiser où se concentrent les biens annoncés aux enchères immobilières dans la base Licitor et comment leur répartition évolue en France de 1999 à 2026.</p>
+    <p>ATLAS permet de visualiser où se concentrent les biens annoncés aux enchères immobilières dans la base Licitor et comment leur répartition évolue en France de ${a.min_year} à ${a.max_year}.</p>
     <h3>À quoi peut-il servir ?</h3>
     <p>ATLAS peut servir de <strong>base d’analyse géographique et historique</strong> pour un mémoire :</p>
     <ul>
       <li>Repérer les départements et communes qui concentrent le plus de biens annoncés aux enchères.</li>
-      <li>Comparer les volumes année par année, de 1999 à 2026.</li>
+      <li>Comparer les volumes année par année, de ${a.min_year} à ${a.max_year}.</li>
       <li>Étudier les différences entre catégories de biens et entre territoires.</li>
       <li>Produire des cartes et graphiques pour illustrer tes résultats et choisir des territoires à étudier plus précisément.</li>
     </ul>
-    <p>ATLAS a collecté, le 14 octobre 2026, <strong>${num(a.source_rows)} entrées de biens/lots</strong>.</p>
-    <p>Les ${num(a.historical)} entrées historiques et les ${num(a.upcoming)} à venir concordent avec les compteurs des 167 juridictions. Une annonce peut regrouper plusieurs lots.</p>
+    <p>ATLAS a collecté, le ${new Date(a.collected_at).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})}, <strong>${num(a.source_rows)} entrées de biens/lots</strong>.</p>
+    <p>Les ${num(a.historical)} entrées historiques et les ${num(a.upcoming)} à venir concordent avec les compteurs des ${num(a.juridictions)} juridictions. Une annonce peut regrouper plusieurs lots.</p>
     <p>À savoir : dans certaines annonces Licitor, on n’a pas la confirmation officielle que le bien a été vendu, mais on a la certitude qu’il a été mis en annonce.</p>
     <p>Le but de cette carte est de comprendre l’évolution par zone et où se trouvent les zones avec le plus de biens mis en annonce, afin de délimiter notre terrain d’étude pour un mémoire et de comprendre où il y a le plus de mises en annonce de ventes aux enchères.</p>
     <h3>Période et dates</h3>
-    <p>Filtres ${a.min_year}–${a.max_year}, dates d’audience annoncées extraites des URL publiques, et non dates effectives d’adjudication. 2026 est partielle et inclut des audiences à venir.</p>
+    <p>Filtres ${a.min_year}–${a.max_year}, dates d’audience annoncées extraites des URL publiques, et non dates effectives d’adjudication. ${a.max_year} est partielle et inclut des audiences à venir.</p>
     <h3>Localisation des biens</h3>
     <p><strong>${num(a.precision.commune)} entrées</strong> ont pu être rattachées à une commune, en vérifiant son nom et son département dans une liste officielle.</p>
     <p>Les points sont placés <strong>au centre de la commune</strong>, pas à l’adresse exacte du bien ni au tribunal. Ils donnent donc une localisation approximative.</p>

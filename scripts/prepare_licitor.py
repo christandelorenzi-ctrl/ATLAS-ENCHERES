@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Build ATLAS exclusively from the cached Licitor census. No network calls."""
-import collections, csv, datetime, gzip, hashlib, json, re, unicodedata
+import collections, csv, datetime, gzip, hashlib, json, re, unicodedata, zoneinfo
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/'licitor_audit/lots_audiences.csv'
+CENSUS_RESULT=ROOT/'licitor_audit/FINAL_RESULT.json'  # écrit à la fin de chaque collecte
+FIRST_YEAR=1999  # début des archives Licitor ; une audience plus ancienne est une date atypique
 MONTHS={'janvier':1,'fevrier':2,'mars':3,'avril':4,'mai':5,'juin':6,'juillet':7,'aout':8,'septembre':9,'octobre':10,'novembre':11,'decembre':12}
 LABELS={'appartements':'Appartements','maisons':'Maisons','terrains':'Terrains','parkings':'Parkings','immeubles':'Immeubles','locaux-commerciaux':'Locaux commerciaux','entrepots-locaux-activites':'Entrepôts et locaux d’activité','autres-biens-immobiliers':'Autres biens immobiliers','actifs-immateriels':'Actifs immatériels à isoler'}
 def normalized(v):return unicodedata.normalize('NFKD',v).encode('ascii','ignore').decode().lower()
@@ -22,8 +24,14 @@ def date_from_url(url):
 def dump(path,value):
     path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(json.dumps(value,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+def collection_date():
+    """Date (heure de Paris) de la fin de la collecte, lue dans le résultat du recensement."""
+    finished=datetime.datetime.fromisoformat(json.loads(CENSUS_RESULT.read_text())['timestamp'])
+    return finished.astimezone(zoneinfo.ZoneInfo('Europe/Paris')).date()
 def main():
     rows=list(csv.DictReader(SOURCE.open(encoding='utf-8-sig',newline='')))
+    collected=collection_date()
+    last_year=collected.year+1  # audiences à venir annoncées jusqu'à l'année suivante au plus
     ref={r['code']:r for r in json.loads((ROOT/'data/reference/communes.json').read_text())}
     shapes=json.loads((ROOT/'data/reference/departements.geojson').read_text())
     deps={f['properties']['code']:f['properties']['nom'] for f in shapes['features']}
@@ -34,7 +42,7 @@ def main():
         if value not in indices:indices[value]=len(table);table.append(value)
         return indices[value]
     for row in rows:
-        source_date=date_from_url(row['source_audience']);year=int(source_date[:4]);anomaly=year<1999 or year>2026
+        source_date=date_from_url(row['source_audience']);year=int(source_date[:4]);anomaly=year<FIRST_YEAR or year>last_year
         if anomaly:anomalies.append({'id':row['entree_audience_id'],'date_source':source_date,'url':row['url'],'source_audience':row['source_audience']})
         code=row['code_insee'];raw_dep=row['departement_source'];dep=raw_dep if raw_dep in deps else ''
         if code:dep=ref[code]['codeDepartement'];communes[code]={'name':ref[code]['nom'],'dep':dep,'center':ref[code].get('centre',{}).get('coordinates')}
@@ -61,12 +69,15 @@ def main():
         'precision':precision,'immaterial':sum(r['immaterial'] for r in records),'without_commune':sum(not r['commune'] for r in records),
         'without_department':sum(not r['dep'] for r in records),'historical':sum(r['historical'] for r in records),
         'upcoming':sum(not r['historical'] for r in records),'prepared_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        'collected_at':'2026-10-14','heat_resolution':'commune','geocoder':None,'missing':{'Adresse exacte':len(records)}}
+        'collected_at':collected.isoformat(),'juridictions':len(organizers),'heat_resolution':'commune','geocoder':None,'missing':{'Adresse exacte':len(records)}}
     cube=collections.Counter((r['year'],r['category'],r['dep'],r['commune'],r['precision']) for r in records)
     data={'records':records,'addresses':addresses,'audiences':audiences,'natures':natures,'organizers':organizers,'communes':communes,
         'departments':deps,'categories':LABELS,'audit':audit,'aggregates':[[*k,v] for k,v in cube.items()]}
-    assert len(records)==87811 and len({r['id'] for r in records})==len(records)
-    assert precision['commune']==85232 and sum(cube.values())==len(records)
+    # Contrôles valables pour toute collecte. Les effectifs exacts d'une collecte
+    # donnée (87 811 entrées…) sont vérifiés dans tests/test_data.py.
+    assert len({r['id'] for r in records})==len(records), 'Identifiants d’entrée en double'
+    assert sum(precision.values())==len(records), 'Précision manquante pour certaines entrées'
+    assert sum(cube.values())==len(records), 'Agrégations incohérentes avec les entrées'
     for feature in shapes['features']:feature['id']=feature['properties']['code']
     dump(ROOT/'app/data/atlas.json',data);dump(ROOT/'app/data/departements.geojson',shapes)
     dump(ROOT/'app/data/anomalies.json',anomalies);dump(ROOT/'app/data/pilot.json',{'dataset':'licitor','size':0,'records':[]})
