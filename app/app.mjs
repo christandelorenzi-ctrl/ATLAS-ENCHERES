@@ -458,7 +458,7 @@ function renderMethod(pilot,anomalies){
     <h3>Taux pour 10 000 habitants</h3>
     <p>Le bouton « Pour 10 000 habitants » rapporte le nombre d’entrées de la sélection à la population : <strong>taux = entrées ÷ population × 10 000</strong>, sur toute la période choisie. Il permet de comparer des territoires de tailles différentes.</p>
     <ul>
-      <li>Population : ${esc(a.population_source)} (${num(a.population_total)} habitants au total). La population d’un département est la somme de celle de ses communes. Elle est la même pour toutes les années : un taux sur plusieurs années ne tient pas compte de l’évolution de la population.</li>
+      <li>Population : ${esc(a.population_source)} (${num(a.population_total)} habitants au total). ${esc(a.population_note)} La population d’un département est la somme de celle de ses communes. Elle est la même pour toutes les années : un taux sur plusieurs années ne tient pas compte de l’évolution de la population.</li>
       <li>Le classement des communes ne retient que celles d’au moins ${num(MIN_TOWN_POPULATION)} habitants : dans une très petite commune, une ou deux ventes suffisent à produire un taux très élevé mais peu significatif.</li>
       <li>Sur la carte des départements, les couleurs forment 6 groupes de même taille, recalculés pour chaque sélection : la légende indique les valeurs exactes. Les cartes « Chaleur » et « Points » restent en nombre d’entrées.</li>
     </ul>

@@ -54,6 +54,8 @@ class LicitorDataTests(unittest.TestCase):
     def test_population(self):
         # Chaque commune de la base a une population ; les départements en sont la somme.
         self.assertTrue(all(c['population']>0 for c in self.data['communes'].values()))
+        self.assertEqual(self.audit['population_year'],2023)  # millésime INSEE documenté
+        self.assertEqual(self.data['communes']['75056']['population'],2103778)  # Paris, populations de référence 2023
         pops=self.data['departmentPopulation']
         self.assertEqual(pops['75'],self.data['communes']['75056']['population'])
         self.assertLessEqual(sum(pops.values()),self.audit['population_total'])

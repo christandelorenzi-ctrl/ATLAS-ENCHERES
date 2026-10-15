@@ -5,8 +5,10 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 FILES={
  'communes.json':'https://geo.api.gouv.fr/communes?fields=code,nom,codesPostaux,codeDepartement,centre&format=json',
- # Population municipale INSEE de chaque commune, pour les taux pour 10 000 habitants.
- 'population.json':'https://geo.api.gouv.fr/communes?fields=code,population&format=json',
+ # Population municipale de chaque commune, pour les taux : « Populations de référence 2023 » de l'INSEE
+ # (millésime 2023, en vigueur au 1er janvier 2026), via le paquet officiel Etalab en version figée 6.0.0.
+ # Mêmes chiffres que geo.api.gouv.fr au 15/10/2026, mais l'année de la source est documentée.
+ 'population-insee-2023.json':'https://unpkg.com/@etalab/decoupage-administratif@6.0.0/data/communes.json',
  'departements.geojson':'https://etalab-datasets.geo.data.gouv.fr/contours-administratifs/2024/geojson/departements-1000m.geojson'
 }
 def main():

@@ -9,6 +9,10 @@ CENSUS_RESULT=ROOT/'licitor_audit/FINAL_RESULT.json'  # écrit à la fin de chaq
 FIRST_YEAR=1999  # début des archives Licitor ; une audience plus ancienne est une date atypique
 URL_PREFIX='https://www.licitor.com/annonce/'  # début commun à tous les liens, stocké une seule fois
 ORIGIN='commune_publiee_licitor'  # origine de la commune, identique pour toutes les entrées
+POPULATION_YEAR=2023
+POPULATION_SOURCE=('Populations de référence 2023 de l’INSEE (millésime 2023, en vigueur au 1er janvier 2026), '
+    'via le paquet Etalab @etalab/decoupage-administratif 6.0.0')
+POPULATION_NOTE='Mayotte : population INSEE 2017, la plus récente disponible dans cette source.'
 MONTHS={'janvier':1,'fevrier':2,'mars':3,'avril':4,'mai':5,'juin':6,'juillet':7,'aout':8,'septembre':9,'octobre':10,'novembre':11,'decembre':12}
 LABELS={'appartements':'Appartements','maisons':'Maisons','terrains':'Terrains','parkings':'Parkings','immeubles':'Immeubles','locaux-commerciaux':'Locaux commerciaux','entrepots-locaux-activites':'Entrepôts et locaux d’activité','autres-biens-immobiliers':'Autres biens immobiliers','actifs-immateriels':'Actifs immatériels à isoler'}
 def normalized(v):return unicodedata.normalize('NFKD',v).encode('ascii','ignore').decode().lower()
@@ -37,8 +41,10 @@ def main():
     ref={r['code']:r for r in json.loads((ROOT/'data/reference/communes.json').read_text())}
     shapes=json.loads((ROOT/'data/reference/departements.geojson').read_text())
     deps={f['properties']['code']:f['properties']['nom'] for f in shapes['features']}
-    # Population municipale INSEE (geo.api.gouv.fr) ; celle d'un département est la somme de ses communes.
-    population={c['code']:c.get('population') or 0 for c in json.loads((ROOT/'data/reference/population.json').read_text())}
+    # Population municipale INSEE, millésime 2023 (voir POPULATION_SOURCE) ; celle d'un département est la
+    # somme de ses communes. Le fichier contient aussi les communes déléguées et arrondissements : on les écarte.
+    population={c['code']:c.get('population') or 0 for c in json.loads((ROOT/'data/reference/population-insee-2023.json').read_text())
+        if c.get('type')=='commune-actuelle'}
     dep_population=collections.Counter()
     for code,c in ref.items():dep_population[c['codeDepartement']]+=population.get(code,0)
     organizers={r['url'].split('/')[4]:r['label'] for r in csv.DictReader((ROOT/'licitor_audit/juridictions.csv').open(encoding='utf-8-sig'))}
@@ -81,7 +87,8 @@ def main():
         'without_department':sum(not r['dep'] for r in records),'historical':sum('upcoming' not in r for r in records),
         'upcoming':sum('upcoming' in r for r in records),'origin':ORIGIN,'prepared_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'collected_at':collected.isoformat(),'juridictions':len(organizers),
-        'population_source':'Population municipale INSEE, geo.api.gouv.fr','population_total':sum(population.values()),'heat_resolution':'commune','geocoder':None,'missing':{'Adresse exacte':len(records)}}
+        'population_source':POPULATION_SOURCE,'population_year':POPULATION_YEAR,'population_note':POPULATION_NOTE,
+        'population_total':sum(population.values()),'heat_resolution':'commune','geocoder':None,'missing':{'Adresse exacte':len(records)}}
     cube=collections.Counter((r['year'],r['category'],r['dep'],r['commune'],r['precision']) for r in records)
     data={'records':records,'urlPrefix':URL_PREFIX,'addresses':addresses,'audiences':audiences,'natures':natures,'reasons':reasons,
         'organizers':organizers,'communes':communes,'departments':deps,'categories':LABELS,'audit':audit,
