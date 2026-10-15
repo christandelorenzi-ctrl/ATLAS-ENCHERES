@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {selectRecords,summarize,groupedPoints,departmentClass,exportTable,EXPORT_HEADER,filtersToQuery,filtersFromQuery} from '../app/stats.mjs';
+import {selectRecords,summarize,groupedPoints,departmentClass,exportTable,EXPORT_HEADER,filtersToQuery,filtersFromQuery,rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION} from '../app/stats.mjs';
 const data=JSON.parse(readFileSync(new URL('../app/data/atlas.json',import.meta.url)));
 const aggregates=JSON.parse(readFileSync(new URL('../reports/aggregates.json',import.meta.url)));
 const base={from:data.audit.min_year,to:data.audit.max_year,category:'',dep:'',search:'',includeUndated:true};
@@ -39,11 +39,12 @@ assert.ok(table.slice(1).every(row=>row[5].startsWith('https://www.licitor.com/a
 // Lien partageable : écrire puis relire l'adresse redonne exactement les mêmes filtres.
 const {includeUndated,...defaults}=base;
 assert.equal(filtersToQuery(defaults,'heat',data.audit),'');
-assert.deepEqual(filtersFromQuery('',data),{mode:'heat',filters:defaults});
-for(const f of cases)for(const mode of ['heat','points','departments']){
+assert.deepEqual(filtersFromQuery('',data),{mode:'heat',measure:'count',filters:defaults});
+for(const f of cases)for(const mode of ['heat','points','departments'])for(const measure of ['count','rate']){
   const {includeUndated,...filters}=f;
-  assert.deepEqual(filtersFromQuery('?'+filtersToQuery(filters,mode,data.audit),data),{mode,filters});
+  assert.deepEqual(filtersFromQuery('?'+filtersToQuery(filters,mode,data.audit,measure),data),{mode,measure,filters});
 }
+assert.equal(filtersFromQuery('?mesure=nimporte',data).measure,'count');
 // Adresses mal tapées ou trafiquées : chaque valeur impossible est ignorée.
 for(const bad of ['?debut=1800','?fin=3000','?debut=abc','?debut=2010.5','?categorie=chateaux','?categorie=constructor',
   '?departement=99','?departement=__proto__','?mode=satellite','?debut=&fin=']){
@@ -53,4 +54,19 @@ for(const bad of ['?debut=1800','?fin=3000','?debut=abc','?debut=2010.5','?categ
 }
 assert.deepEqual(filtersFromQuery('?debut=2020&fin=2010',data).filters.from,2010);  // années inversées : remises dans l'ordre
 assert.equal(filtersFromQuery('?recherche='+'x'.repeat(500),data).filters.search.length,100);
+// Taux pour 10 000 habitants.
+assert.equal(rate(5,10000),5);assert.equal(rate(3,0),null);assert.equal(rate(3,undefined),null);
+const all=summarize(data.records);
+const depRates=rateRank(all.deps,data.departmentPopulation);
+assert.ok(depRates.every(([code,value])=>Math.abs(value-(all.deps[code]||0)/data.departmentPopulation[code]*1e4)<1e-9));
+assert.ok(depRates.every(([,v],i)=>i===0||depRates[i-1][1]>=v));  // trié du plus fort au plus faible
+const townPops=Object.fromEntries(Object.entries(data.communes).map(([code,c])=>[code,c.population]));
+assert.ok(rateRank(all.towns,townPops,MIN_TOWN_POPULATION).every(([code])=>townPops[code]>=MIN_TOWN_POPULATION));
+// Classes de la carte : 6 groupes de même taille, classe 0 réservée aux départements sans entrée.
+const values=depRates.map(([,v])=>v),th=quantileThresholds(values);
+assert.equal(th.length,5);assert.ok(th.every((t,i)=>i===0||th[i-1]<=t));
+const sizes=[0,0,0,0,0,0,0];values.forEach(v=>sizes[quantileClass(v,th)]++);
+assert.equal(sizes[0],values.filter(v=>!(v>0)).length);
+assert.ok(sizes.slice(1).every(n=>Math.abs(n-values.filter(v=>v>0).length/6)<=2),String(sizes));
+assert.equal(quantileClass(0,th),0);assert.equal(quantileClass(null,th),0);assert.deepEqual(quantileThresholds([0,0]),[]);
 console.log(`${cases.length} scénarios de filtres réels : comptages, cube, pondération des points et chaleur concordants.`);

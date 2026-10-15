@@ -1,4 +1,5 @@
-import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,filtersToQuery,filtersFromQuery,CHORO} from './stats.mjs';
+import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,filtersToQuery,filtersFromQuery,CHORO,departmentClass,
+  rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION} from './stats.mjs';
 const started=performance.now();
 const $=id=>document.getElementById(id);
 const fmt=new Intl.NumberFormat('fr-FR');
@@ -8,6 +9,9 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const colors=['#e7edef','#d0e8ec','#97cbd3','#58a9b8','#298394','#166176','#123f55'];
 const f={from:null,to:null,category:'',dep:'',search:'',includeUndated:true};  // période remplie par populate() à partir des données
 let data,departments,map,current,summary,mode='heat',rank='dep',popup,hover,ready=false,queued;
+let measure='count',rateThresholds=[];  // mesure : 'count' (nombre d'entrées) ou 'rate' (pour 10 000 habitants)
+const fmtRate=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
+const rateText=x=>x===null?'population inconnue':`${fmtRate.format(x)} pour 10 000 hab.`;
 let rendered=false,basemapLoaded=false,baseErrors=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const getJSON=async path=>{const response=await fetch(path);if(!response.ok)throw Error(`${path} : HTTP ${response.status}`);return response.json();};
@@ -32,11 +36,19 @@ function applyQuery(){
   $('from').value=f.from;$('to').value=f.to;$('category').value=f.category;$('search').value=f.search;
   $('department').value=f.dep;
   if($('department').value!==f.dep)f.dep=$('department').value='';  // département sans aucune entrée
+  setMeasure(shared.measure);
   switchMode(shared.mode);
+}
+// Bouton « Nombre d'entrées / Pour 10 000 habitants » : change le classement et la carte des départements.
+function setMeasure(next){
+  measure=next;
+  for(const m of ['count','rate'])$('measure-'+m).setAttribute('aria-pressed',String(m===measure));
+  if(!summary)return;  // à l'ouverture, le premier calcul n'est pas encore fait
+  renderRanking();if(ready)colorDepartments();syncQuery();
 }
 // … et à chaque changement, on réécrit l'adresse (sans ajouter d'étape au bouton « Précédent »).
 function syncQuery(){
-  const query=filtersToQuery(f,mode,data.audit);
+  const query=filtersToQuery(f,mode,data.audit,measure);
   history.replaceState(null,'',query?`?${query}`:location.pathname);
 }
 
@@ -58,15 +70,27 @@ function update(){
   syncQuery();
 }
 
+// Populations des communes présentes dans la base, pour les taux (calculées une seule fois).
+let townPopulations;
+function rankingItems(){
+  if(measure==='count')return rank==='dep'?summary.depRank:summary.townRank;
+  townPopulations??=Object.fromEntries(Object.entries(data.communes).map(([code,c])=>[code,c.population]));
+  const ranked=rank==='dep'?rateRank(summary.deps,data.departmentPopulation):rateRank(summary.towns,townPopulations,MIN_TOWN_POPULATION);
+  return ranked.filter(([,value])=>value>0);
+}
 function renderRanking(){
-  const items=(rank==='dep'?summary.depRank:summary.townRank).slice(0,10);
+  const items=rankingItems().slice(0,10),isRate=measure==='rate';
+  $('ranking-subtitle').textContent=isRate
+    ?`Top 10 · pour 10 000 habitants${rank==='town'?` · communes de ${num(MIN_TOWN_POPULATION)} habitants et plus`:''}`
+    :'Top 10 · sélection active';
   $('ranking').replaceChildren();
   if(!items.length){const li=document.createElement('li');li.className='empty-state';li.textContent='Aucun territoire identifié pour cette sélection. Ajustez les filtres.';$('ranking').append(li);}
-  items.forEach(([code,count],i)=>{
+  items.forEach(([code,value],i)=>{
     const label=rank==='dep'?data.departments[code]:`${data.communes[code].name} · ${data.communes[code].dep}`;
+    const count=(rank==='dep'?summary.deps:summary.towns)[code]||0;
     const li=document.createElement('li'),button=document.createElement('button');
-    button.title=`Explorer ${label} · ${num(count)} entrées`;
-    button.innerHTML=`<span class="rank-number">${String(i+1).padStart(2,'0')}</span><span class="rank-name">${esc(label)}</span><span class="rank-count">${num(count)}</span><span class="rank-bar" style="width:${count/items[0][1]*75}%"></span>`;
+    button.title=`Explorer ${label} · ${num(count)} entrées${isRate?` · ${rateText(value)}`:''}`;
+    button.innerHTML=`<span class="rank-number">${String(i+1).padStart(2,'0')}</span><span class="rank-name">${esc(label)}</span><span class="rank-count">${isRate?fmtRate.format(value):num(value)}</span><span class="rank-bar" style="width:${value/items[0][1]*75}%"></span>`;
     button.onclick=()=>focusTerritory(code,rank);li.append(button);$('ranking').append(li);
   });
 }
@@ -161,7 +185,8 @@ function initMap(){
     map.addSource('points',{type:'geojson',data:{type:'FeatureCollection',features:[]},cluster:true,clusterMaxZoom:14,clusterRadius:42,
       clusterProperties:{annonces:['+',['get','n']]}});
     map.addSource('approx',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-    const ramp=['step',['coalesce',['feature-state','count'],0],colors[0],...CHORO.slice(1).flatMap((n,i)=>[n,colors[i+1]])];
+    // Chaque département reçoit un numéro de classe (0 à 6), calculé dans updateSources selon la mesure choisie.
+    const ramp=['step',['coalesce',['feature-state','cls'],0],colors[0],...colors.slice(1).flatMap((color,i)=>[i+1,color])];
     map.addLayer({id:'department-fill',type:'fill',source:'departments',paint:{'fill-color':ramp,'fill-opacity':.85}});
     map.addLayer({id:'department-border',type:'line',source:'departments',paint:{'line-color':'#718e9a','line-width':.65,'line-opacity':.55}});
     map.addLayer({id:'heatmap',type:'heatmap',source:'heat',maxzoom:9,paint:{
@@ -207,7 +232,17 @@ function updateSources(){
   // Les trois sources affichent les mêmes groupes de communes : on les calcule une seule fois.
   const grouped=groupedPoints(current,['commune']);
   for(const id of ['heat','points','approx'])map.getSource(id).setData(grouped);
-  departments.features.forEach(feature=>map.setFeatureState({source:'departments',id:feature.id},{count:summary.deps[feature.properties.code]||0}));
+  colorDepartments();
+}
+// Couleur des départements : seuils fixes pour le nombre, 6 groupes de même taille pour le taux.
+function colorDepartments(){
+  const depRate=code=>rate(summary.deps[code]||0,data.departmentPopulation[code]);
+  rateThresholds=quantileThresholds(departments.features.map(feature=>depRate(feature.properties.code)));
+  departments.features.forEach(feature=>{
+    const code=feature.properties.code,count=summary.deps[code]||0;
+    const cls=measure==='rate'?quantileClass(depRate(code),rateThresholds):departmentClass(count);
+    map.setFeatureState({source:'departments',id:feature.id},{cls});
+  });
   renderLegend();
 }
 function switchMode(next){
@@ -229,6 +264,12 @@ function renderLegend(){
   }else if(mode==='points'){
     $('legend').innerHTML=`<strong>Entrées regroupées par proximité</strong><div class="legend-item"><span class="legend-circle"></span> Groupe de communes · nombre d’entrées</div><div class="legend-item"><span class="legend-circle approx"></span> ≈ Centre de commune, emplacement approximatif</div><p>${num(summary.precision.commune)} entrées incluses.<br>Aucun point ne représente une adresse exacte.</p>`;
     $('map-note').textContent='Cliquez sur un groupe pour zoomer, puis sur un emplacement pour lire les entrées.';
+  }else if(measure==='rate'){
+    // Légende fabriquée à partir des seuils réellement calculés pour la sélection.
+    const t=rateThresholds.map(x=>fmtRate.format(x));
+    const labels=['Aucune entrée',...(t.length?[`moins de ${t[0]}`,...t.slice(1).map((x,i)=>`${t[i]} à ${x}`),`${t.at(-1)} et plus`]:[])];
+    $('legend').innerHTML=`<strong>Entrées pour 10 000 habitants</strong>${labels.map((label,i)=>`<div class="legend-item"><span class="swatch" style="background:${colors[i]}"></span>${label}</div>`).join('')}<p>6 groupes de départements de même taille, recalculés pour chaque sélection.<br>Population municipale INSEE.</p>`;
+    $('map-note').textContent=`Taux = entrées de la sélection ÷ population × 10 000, sur la période ${f.from}–${f.to}. ${num(summary.unknownDep)} entrées non attribuées à un département.`;
   }else{
     // Textes de la légende fabriqués à partir des seuils de couleur (CHORO), pour qu'ils restent toujours d'accord.
     const labels=CHORO.map((n,i)=>i===0?'0':i===CHORO.length-1?`≥ ${num(n)}`:`${num(n)}–${num(CHORO[i+1]-1)}`);
@@ -253,7 +294,7 @@ function attachMapEvents(){
     map.getCanvas().style.cursor='pointer';
     const feature=e.features[0],code=feature.properties.code,count=summary.deps[code]||0;
     hover?.remove();hover=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:12}).setLngLat(e.lngLat)
-      .setHTML(`<h3>${esc(feature.properties.nom)} · ${esc(code)}</h3><p><strong>${num(count)} entrées</strong><br>${pct(count,summary.total)} de la sélection nationale observée${f.dep||f.search?' (filtres actifs)':''}</p>`).addTo(map);
+      .setHTML(`<h3>${esc(feature.properties.nom)} · ${esc(code)}</h3><p><strong>${num(count)} entrées</strong> · ${rateText(rate(count,data.departmentPopulation[code]))}<br>${pct(count,summary.total)} de la sélection nationale observée${f.dep||f.search?' (filtres actifs)':''}</p>`).addTo(map);
   });
   map.on('mouseleave','department-fill',()=>{hover?.remove();map.getCanvas().style.cursor='';});
   map.on('click','department-fill',e=>{if(mode==='departments')focusTerritory(e.features[0].properties.code,'dep');});
@@ -301,7 +342,14 @@ function renderMethod(pilot,anomalies){
       <li><strong>Points :</strong> les cercles regroupent les communes proches et indiquent le nombre d’entrées.</li>
       <li><strong>Départements :</strong> plus la couleur est foncée, plus le département compte d’entrées. Les mêmes seuils de couleur sont utilisés pour tous les filtres.</li>
     </ul>
-    <p>Les pourcentages sont calculés sur toutes les entrées sélectionnées. Les chiffres ne tiennent pas compte du nombre d’habitants et décrivent uniquement la base Licitor.</p>
+    <p>Les pourcentages sont calculés sur toutes les entrées sélectionnées. Les chiffres décrivent uniquement la base Licitor.</p>
+    <h3>Taux pour 10 000 habitants</h3>
+    <p>Le bouton « Pour 10 000 habitants » rapporte le nombre d’entrées de la sélection à la population : <strong>taux = entrées ÷ population × 10 000</strong>, sur toute la période choisie. Il permet de comparer des territoires de tailles différentes.</p>
+    <ul>
+      <li>Population : ${esc(a.population_source)} (${num(a.population_total)} habitants au total). La population d’un département est la somme de celle de ses communes. Elle est la même pour toutes les années : un taux sur plusieurs années ne tient pas compte de l’évolution de la population.</li>
+      <li>Le classement des communes ne retient que celles d’au moins ${num(MIN_TOWN_POPULATION)} habitants : dans une très petite commune, une ou deux ventes suffisent à produire un taux très élevé mais peu significatif.</li>
+      <li>Sur la carte des départements, les couleurs forment 6 groupes de même taille, recalculés pour chaque sélection : la légende indique les valeurs exactes. Les cartes « Chaleur » et « Points » restent en nombre d’entrées.</li>
+    </ul>
     <h3>Sources et fonctionnement local</h3>
     <p><a href="https://www.licitor.com/historique-des-adjudications.html" target="_blank" rel="noopener">Archives publiques Licitor</a> ; <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">référentiel officiel des communes</a> ; contours départementaux Etalab 2024. Les listes d’audiences sont mises en cache ; les fiches individuelles ne sont pas toutes analysées. Aucun statut ou prix d’adjudication n’est déduit de la présence d’une entrée. Données et bibliothèque MapLibre locales, fond de carte OpenFreeMap (données OpenStreetMap) et polices en ligne, sans compte ni service payant. L’ancienne base est retirée de l’application active.</p>`;
 }
@@ -331,6 +379,7 @@ function wire(){
   };
   $('reset').onclick=()=>{clearTimeout(queued);Object.assign(f,{from:data.audit.min_year,to:data.audit.max_year,category:'',dep:'',search:'',includeUndated:true});$('from').value=f.from;$('to').value=f.to;$('category').value=$('department').value=$('search').value='';update();$('annual-chart').scrollLeft=0;map?.flyTo({center:[2.7,46.55],zoom:4.8,duration:reduceMotion?0:700});};
   document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>switchMode(button.dataset.mode));
+  for(const m of ['count','rate'])$('measure-'+m).onclick=()=>setMeasure(m);
   for(const kind of ['dep','town'])$('rank-'+kind).onclick=()=>{rank=kind;['dep','town'].forEach(k=>$('rank-'+k).setAttribute('aria-pressed',String(k===kind)));renderRanking();};
   $('home').onclick=()=>map?.flyTo({center:[2.7,46.55],zoom:4.8,duration:reduceMotion?0:700});
   $('overseas').onchange=()=>{if($('overseas').value)focusTerritory($('overseas').value,'dep');$('overseas').value='';};

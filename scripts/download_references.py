@@ -5,6 +5,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 FILES={
  'communes.json':'https://geo.api.gouv.fr/communes?fields=code,nom,codesPostaux,codeDepartement,centre&format=json',
+ # Population municipale INSEE de chaque commune, pour les taux pour 10 000 habitants.
+ 'population.json':'https://geo.api.gouv.fr/communes?fields=code,population&format=json',
  'departements.geojson':'https://etalab-datasets.geo.data.gouv.fr/contours-administratifs/2024/geojson/departements-1000m.geojson'
 }
 def main():

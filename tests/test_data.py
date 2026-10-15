@@ -51,4 +51,11 @@ class LicitorDataTests(unittest.TestCase):
         self.assertEqual(dict(collections.Counter(r['precision'] for r in self.records)),{k:v for k,v in self.audit['precision'].items() if v})
         self.assertEqual(self.audit['without_department'],sum(not r['dep'] for r in self.records))
         self.assertEqual(self.audit['without_commune'],2479)
+    def test_population(self):
+        # Chaque commune de la base a une population ; les départements en sont la somme.
+        self.assertTrue(all(c['population']>0 for c in self.data['communes'].values()))
+        pops=self.data['departmentPopulation']
+        self.assertEqual(pops['75'],self.data['communes']['75056']['population'])
+        self.assertLessEqual(sum(pops.values()),self.audit['population_total'])
+        self.assertTrue(all(dep in pops for dep in {r['dep'] for r in self.records if r['dep']}-{'984','989'}))
 if __name__=='__main__':unittest.main()

@@ -1,9 +1,13 @@
 {
-  "recorded_at": "2026-10-09T20:48:33.872056+00:00",
+  "recorded_at": "2026-10-15T15:35:49.205244+00:00",
   "files": {
     "communes.json": {
       "url": "https://geo.api.gouv.fr/communes?fields=code,nom,codesPostaux,codeDepartement,centre&format=json",
       "sha256": "ad1ccb7cb86e656ce1170304da274c619de7addbf07669f87364d9f26ca3b89b"
+    },
+    "population.json": {
+      "url": "https://geo.api.gouv.fr/communes?fields=code,population&format=json",
+      "sha256": "c6f40c1ad46a28e2f8645e201459d80edc61093049ccc0accc5fa040eb7876ab"
     },
     "departements.geojson": {
       "url": "https://etalab-datasets.geo.data.gouv.fr/contours-administratifs/2024/geojson/departements-1000m.geojson",

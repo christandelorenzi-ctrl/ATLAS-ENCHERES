@@ -43,10 +43,32 @@ export function exportTable(records, data) {
     Boolean(r.similar), r.announcementId, data.natures[r.nature], data.audiences[r.audience], Boolean(r.dateAnomaly), Boolean(r.immaterial)]);
   return [EXPORT_HEADER, ...rows];
 }
+// Taux pour 10 000 habitants : nombre d'entrées de la sélection rapporté à la population.
+// Une commune trop peu peuplée donne un taux trompeur (2 ventes dans un village de 40 habitants
+// = 500 pour 10 000) : le classement des communes ne retient que celles d'au moins 5 000 habitants.
+export const MIN_TOWN_POPULATION = 5000;
+export const rate = (count, population) => population > 0 ? count / population * 10000 : null;
+export function rateRank(counts, populations, minPopulation = 1) {
+  return Object.entries(populations).filter(([, p]) => p >= minPopulation)
+    .map(([code, p]) => [code, rate(counts[code] || 0, p)])
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+// Couleurs de la carte en mode taux : 6 groupes de même taille parmi les territoires ayant au moins
+// une entrée (la classe 0 = aucune entrée). Renvoie les 5 seuils qui séparent ces groupes.
+export function quantileThresholds(values, classes = 6) {
+  const sorted = values.filter(v => v > 0).sort((a, b) => a - b);
+  if (!sorted.length) return [];
+  return Array.from({length: classes - 1}, (_, i) => sorted[Math.floor((i + 1) * sorted.length / classes)]);
+}
+export function quantileClass(value, thresholds) {
+  if (!(value > 0)) return 0;
+  return 1 + thresholds.filter(t => value >= t).length;
+}
+
 // Lien partageable : les filtres et le mode de carte sont écrits dans l'adresse de la page
 // (ex. ?debut=2015&departement=93&mode=points). Les valeurs par défaut ne sont pas écrites.
 const MODE_NAMES = {heat:'chaleur', points:'points', departments:'departements'};
-export function filtersToQuery(f, mode, audit) {
+export function filtersToQuery(f, mode, audit, measure = 'count') {
   const p = new URLSearchParams();
   if (f.from !== audit.min_year) p.set('debut', f.from);
   if (f.to !== audit.max_year) p.set('fin', f.to);
@@ -54,6 +76,7 @@ export function filtersToQuery(f, mode, audit) {
   if (f.dep) p.set('departement', f.dep);
   if (f.search) p.set('recherche', f.search);
   if (mode !== 'heat') p.set('mode', MODE_NAMES[mode]);
+  if (measure === 'rate') p.set('mesure', 'taux');
   return p.toString();
 }
 // Lit une adresse partagée. Toute valeur inconnue ou impossible est ignorée (valeur par défaut).
@@ -64,7 +87,7 @@ export function filtersFromQuery(query, data) {
   if (from > to) [from, to] = [to, from];
   const known = (table, value) => value !== null && Object.hasOwn(table, value) ? value : '';
   const mode = Object.keys(MODE_NAMES).find(k => MODE_NAMES[k] === p.get('mode')) || 'heat';
-  return {mode, filters: {from, to, category: known(data.categories, p.get('categorie')),
+  return {mode, measure: p.get('mesure') === 'taux' ? 'rate' : 'count', filters: {from, to, category: known(data.categories, p.get('categorie')),
     dep: known(data.departments, p.get('departement')), search: (p.get('recherche') || '').trim().slice(0, 100)}};
 }
 export const CHORO = [0,1,50,150,300,600,1200];
