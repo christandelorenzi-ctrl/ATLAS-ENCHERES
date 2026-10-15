@@ -20,3 +20,6 @@ hosting/atlas-licitor/
 .vercel/
 *.pem
 *.key
+
+# --- Fabriqué par scripts/prepare_licitor.py pour les tests ---
+reports/aggregates.json

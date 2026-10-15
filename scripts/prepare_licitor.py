@@ -7,6 +7,8 @@ ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/'licitor_audit/lots_audiences.csv'
 CENSUS_RESULT=ROOT/'licitor_audit/FINAL_RESULT.json'  # écrit à la fin de chaque collecte
 FIRST_YEAR=1999  # début des archives Licitor ; une audience plus ancienne est une date atypique
+URL_PREFIX='https://www.licitor.com/annonce/'  # début commun à tous les liens, stocké une seule fois
+ORIGIN='commune_publiee_licitor'  # origine de la commune, identique pour toutes les entrées
 MONTHS={'janvier':1,'fevrier':2,'mars':3,'avril':4,'mai':5,'juin':6,'juillet':7,'aout':8,'septembre':9,'octobre':10,'novembre':11,'decembre':12}
 LABELS={'appartements':'Appartements','maisons':'Maisons','terrains':'Terrains','parkings':'Parkings','immeubles':'Immeubles','locaux-commerciaux':'Locaux commerciaux','entrepots-locaux-activites':'Entrepôts et locaux d’activité','autres-biens-immobiliers':'Autres biens immobiliers','actifs-immateriels':'Actifs immatériels à isoler'}
 def normalized(v):return unicodedata.normalize('NFKD',v).encode('ascii','ignore').decode().lower()
@@ -36,7 +38,8 @@ def main():
     shapes=json.loads((ROOT/'data/reference/departements.geojson').read_text())
     deps={f['properties']['code']:f['properties']['nom'] for f in shapes['features']}
     organizers={r['url'].split('/')[4]:r['label'] for r in csv.DictReader((ROOT/'licitor_audit/juridictions.csv').open(encoding='utf-8-sig'))}
-    addresses=[];address_indices={};audiences=[];audience_indices={};natures=[];nature_indices={};communes={};records=[];anomalies=[]
+    addresses=[];address_indices={};audiences=[];audience_indices={};natures=[];nature_indices={};reasons=[];reason_indices={}
+    communes={};records=[];anomalies=[]
     repeated=collections.Counter(r['annonce_id'] for r in rows)
     def intern(table,indices,value):
         if value not in indices:indices[value]=len(table);table.append(value)
@@ -52,13 +55,17 @@ def main():
                 if '/'+slug+'/' in row['url']:dep=d
         immaterial=row['bien_immateriel_a_isoler']=='True'
         coordinates=[float(row['longitude_centre_commune']),float(row['latitude_centre_commune'])] if code and not immaterial else None
+        if not row['url'].startswith(URL_PREFIX):raise ValueError('Lien d’annonce inattendu : '+row['url'])
         record={'id':row['entree_audience_id'],'announcementId':row['annonce_id'],'date':source_date,'year':None if anomaly else year,
             'category':category(row),'address':intern(addresses,address_indices,row['commune_source']+' · '+raw_dep+' (adresse exacte non collectée)'),
-            'nature':intern(natures,nature_indices,row['nature']),'url':row['url'],'audience':intern(audiences,audience_indices,row['source_audience']),
+            'nature':intern(natures,nature_indices,row['nature']),'url':row['url'][len(URL_PREFIX):],'audience':intern(audiences,audience_indices,row['source_audience']),
             'organizer':row['source_audience'].split('/')[4],'commune':code,'dep':dep,'precision':'commune' if coordinates else 'non_resolue',
-            'coordinates':coordinates,'score':None,'reason':'actif_immateriel_exclu' if immaterial else row['justification'],
-            'origin':'commune_publiee_licitor','similar':repeated[row['annonce_id']]>1,'immaterial':immaterial,'dateAnomaly':anomaly,
-            'historical':row['historique']=='True'}
+            'coordinates':coordinates,'reason':intern(reasons,reason_indices,'actif_immateriel_exclu' if immaterial else row['justification'])}
+        # Cases oui/non écrites seulement quand la réponse est « oui » : une case absente vaut « non ».
+        if repeated[row['annonce_id']]>1:record['similar']=True
+        if immaterial:record['immaterial']=True
+        if anomaly:record['dateAnomaly']=True
+        if row['historique']!='True':record['upcoming']=True
         records.append(record)
     precision={k:sum(r['precision']==k for r in records) for k in ['adresse','rue','commune','non_resolue']}
     years=collections.Counter(r['year'] for r in records if r['year'] is not None)
@@ -66,13 +73,13 @@ def main():
         'sha256':hashlib.sha256(SOURCE.read_bytes()).hexdigest(),'dataset':'licitor','version':'licitor-commune-v1',
         'source_rows':len(rows),'valid_rows':len(records),'unique_urls':len(repeated),'unit':'entrée de bien/lot publiée dans une audience',
         'anomalies':len(anomalies),'min_year':min(years),'max_year':max(years),'years':dict(sorted(years.items())),
-        'precision':precision,'immaterial':sum(r['immaterial'] for r in records),'without_commune':sum(not r['commune'] for r in records),
-        'without_department':sum(not r['dep'] for r in records),'historical':sum(r['historical'] for r in records),
-        'upcoming':sum(not r['historical'] for r in records),'prepared_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'precision':precision,'immaterial':sum('immaterial' in r for r in records),'without_commune':sum(not r['commune'] for r in records),
+        'without_department':sum(not r['dep'] for r in records),'historical':sum('upcoming' not in r for r in records),
+        'upcoming':sum('upcoming' in r for r in records),'origin':ORIGIN,'prepared_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'collected_at':collected.isoformat(),'juridictions':len(organizers),'heat_resolution':'commune','geocoder':None,'missing':{'Adresse exacte':len(records)}}
     cube=collections.Counter((r['year'],r['category'],r['dep'],r['commune'],r['precision']) for r in records)
-    data={'records':records,'addresses':addresses,'audiences':audiences,'natures':natures,'organizers':organizers,'communes':communes,
-        'departments':deps,'categories':LABELS,'audit':audit,'aggregates':[[*k,v] for k,v in cube.items()]}
+    data={'records':records,'urlPrefix':URL_PREFIX,'addresses':addresses,'audiences':audiences,'natures':natures,'reasons':reasons,
+        'organizers':organizers,'communes':communes,'departments':deps,'categories':LABELS,'audit':audit}
     # Contrôles valables pour toute collecte. Les effectifs exacts d'une collecte
     # donnée (87 811 entrées…) sont vérifiés dans tests/test_data.py.
     assert len({r['id'] for r in records})==len(records), 'Identifiants d’entrée en double'
@@ -82,6 +89,8 @@ def main():
     dump(ROOT/'app/data/atlas.json',data);dump(ROOT/'app/data/departements.geojson',shapes)
     dump(ROOT/'app/data/anomalies.json',anomalies);dump(ROOT/'app/data/pilot.json',{'dataset':'licitor','size':0,'records':[]})
     dump(ROOT/'reports/audit-licitor.json',audit)
+    # Second calcul indépendant des totaux, utilisé seulement par les tests : il n'est pas envoyé au navigateur.
+    dump(ROOT/'reports/aggregates.json',[[*k,v] for k,v in cube.items()])
     raw=(ROOT/'app/data/atlas.json').read_bytes()
     print(json.dumps({'records':len(records),'localized':precision['commune'],'years':[min(years),max(years)],'date_anomalies':len(anomalies),'bytes':len(raw),'gzip_bytes':len(gzip.compress(raw,compresslevel=5))},ensure_ascii=False))
 if __name__=='__main__':main()

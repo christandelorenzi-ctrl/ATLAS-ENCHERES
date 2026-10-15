@@ -33,6 +33,16 @@ export function groupedPoints(records, levels) {
   }
   return {type:'FeatureCollection',features:[...groups.values()]};
 }
+export const sourceUrl = (r, data) => data.urlPrefix + r.url;  // lien complet de l'annonce Licitor
+// Tableau de l'export CSV : une ligne d'en-tête puis une ligne par entrée.
+// Les cases oui/non absentes des données valent « non » (voir scripts/prepare_licitor.py).
+export const EXPORT_HEADER = ['id_entree','date_audience_annoncee','categorie','adresse_source','organisateur','url','code_insee','departement','precision','longitude','latitude','score_geocodage_non_disponible','origine_commune','raison_precision','annonce_multi_entrees','id_annonce_licitor','nature_publiee','url_audience','date_atypique','actif_immateriel'];
+export function exportTable(records, data) {
+  const rows = records.map(r => [r.id, r.date, data.categories[r.category], data.addresses[r.address], data.organizers[r.organizer],
+    sourceUrl(r, data), r.commune, r.dep, r.precision, ...(r.coordinates || ['', '']), '', data.audit.origin, data.reasons[r.reason],
+    Boolean(r.similar), r.announcementId, data.natures[r.nature], data.audiences[r.audience], Boolean(r.dateAnomaly), Boolean(r.immaterial)]);
+  return [EXPORT_HEADER, ...rows];
+}
 export const CHORO = [0,1,50,150,300,600,1200];
 export function departmentClass(count) {
   let result=0;

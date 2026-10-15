@@ -1,4 +1,4 @@
-import {selectRecords,summarize,groupedPoints,CHORO} from './stats.mjs';
+import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,CHORO} from './stats.mjs';
 const started=performance.now();
 const $=id=>document.getElementById(id);
 const fmt=new Intl.NumberFormat('fr-FR');
@@ -248,7 +248,7 @@ function showPoint(feature){
   const approx=precision!=='adresse';
   const title=precision==='commune'?data.communes[feature.properties.commune]?.name:'Emplacement des entrées';
   const html=`<h3>${esc(title)}</h3><p><strong>${num(records.length)} entrée${records.length>1?'s':''} à cette position</strong></p>${approx?`<span class="approx-badge">${precision==='rue'?'Rue ou lieu-dit approximatif':'Localisation communale approximative — adresse exacte non connue'}</span>`:'<p>Correspondance à l’adresse acceptée · précision cadastrale non établie.</p>'}
-    ${records.slice(0,30).map(r=>`<div class="popup-record"><strong>${esc(data.natures[r.nature])}</strong> · ${r.dateAnomaly?'Date à vérifier':new Date(r.date).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'})}<p>${esc(data.addresses[r.address]||'Adresse absente')}<br>${esc(data.organizers[r.organizer])}</p>${r.similar?'<p>Plusieurs entrées partagent cette annonce ; les lots sont conservés.</p>':''}<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Consulter l’annonce source ↗</a></div>`).join('')}
+    ${records.slice(0,30).map(r=>`<div class="popup-record"><strong>${esc(data.natures[r.nature])}</strong> · ${r.dateAnomaly?'Date à vérifier':new Date(r.date).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'})}<p>${esc(data.addresses[r.address]||'Adresse absente')}<br>${esc(data.organizers[r.organizer])}</p>${r.similar?'<p>Plusieurs entrées partagent cette annonce ; les lots sont conservés.</p>':''}<a href="${esc(sourceUrl(r,data))}" target="_blank" rel="noopener noreferrer">Consulter l’annonce source ↗</a></div>`).join('')}
     ${records.length>30?`<p>${num(records.length-30)} autres entrées à cette position. L’export contient toute la sélection.</p>`:''}`;
   popup?.remove();popup=new maplibregl.Popup({maxWidth:'350px',offset:14}).setLngLat(coordinates).setHTML(html).addTo(map);
 }
@@ -313,9 +313,7 @@ function wire(){
   $('method-dialog').onclick=e=>{if(e.target===$('method-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}};
   $('export').onclick=()=>{
     const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
-    const header=['id_entree','date_audience_annoncee','categorie','adresse_source','organisateur','url','code_insee','departement','precision','longitude','latitude','score_geocodage_non_disponible','origine_commune','raison_precision','annonce_multi_entrees','id_annonce_licitor','nature_publiee','url_audience','date_atypique','actif_immateriel'];
-    const lines=current.map(r=>[r.id,r.date,data.categories[r.category],data.addresses[r.address],data.organizers[r.organizer],r.url,r.commune,r.dep,r.precision,...(r.coordinates||['','']),r.score,r.origin,r.reason,r.similar,r.announcementId,data.natures[r.nature],data.audiences[r.audience],r.dateAnomaly,r.immaterial]);
-    const blob=new Blob(['\ufeff'+[header,...lines].map(row=>row.map(quote).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const blob=new Blob(['\ufeff'+exportTable(current,data).map(row=>row.map(quote).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`atlas-annonces-${f.from}-${f.to}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
   };
 }
