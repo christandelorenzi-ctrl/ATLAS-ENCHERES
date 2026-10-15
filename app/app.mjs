@@ -323,6 +323,8 @@ function wire(){
 try{
   const loaded=await Promise.all([getJSON('data/atlas.json'),getJSON('data/departements.geojson'),getJSON('data/pilot.json'),getJSON('data/anomalies.json')]);
   [data,departments]=loaded;
+  // Version en ligne : les biens sont répartis en plusieurs fichiers (voir scripts/publish_vercel.py).
+  if(data.recordChunks)data.records=(await Promise.all(data.recordChunks.map(name=>getJSON('data/'+name)))).flat();
   populate();wire();renderMethod(loaded[2],loaded[3]);update();
   if(!window.maplibregl)throw Error('La bibliothèque locale MapLibre n’est pas disponible.');
   initMap();
