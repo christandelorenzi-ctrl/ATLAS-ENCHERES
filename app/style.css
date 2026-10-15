@@ -11,3 +11,61 @@
 /* Bouton Nombre / Pour 10 000 habitants, sous les onglets du classement */
 .measure-tabs{margin-top:10px;border-bottom:none}
 .measure-tabs button{padding-bottom:6px}
+
+/* --- Fiche territoire : volet à droite, la carte reste utilisable à côté --- */
+/* Couleurs des graphiques vérifiées (lisibilité et daltonisme) : territoire #00879b, France #b67523. */
+.sheet{--territory:#00879b;--france:#b67523;position:fixed;top:0;right:0;z-index:30;box-sizing:border-box;width:min(540px,100vw);height:100vh;height:100dvh;overflow-y:auto;background:white;border-left:1px solid var(--line);box-shadow:-20px 0 60px #122f4522;padding:24px 28px 32px;animation:sheet-in .2s ease-out}
+.sheet[hidden]{display:none}
+@keyframes sheet-in{from{transform:translateX(24px);opacity:0}}
+.sheet-header{display:flex;justify-content:space-between;gap:12px;align-items:start;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.sheet-header h2{font-size:22px;margin:0 0 6px;font-weight:650}
+.sheet-scope{font-size:11px;color:var(--muted);margin:0;line-height:1.5}
+.sheet-close{font-size:28px;line-height:1;padding:0 6px;color:var(--muted)}
+.sheet-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 0}
+.sheet-tiles article{border:1px solid var(--line);border-radius:8px;padding:12px}
+.sheet-tiles p{font-size:10px;color:var(--muted);margin:0 0 6px}
+.sheet-tiles strong{display:block;font-size:22px;font-weight:600}
+.sheet-tiles small{display:block;font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4}
+.sheet-block{margin-top:26px}
+.sheet-block h3{font-size:13px;font-weight:600;margin:0 0 3px}
+.sheet-note{font-size:10px;color:var(--muted);margin:0 0 8px;line-height:1.5}
+.sheet-legend{display:flex;gap:16px;font-size:11px;margin:6px 0 2px;flex-wrap:wrap}
+.sheet-legend span::before{content:'';display:inline-block;width:16px;border-top:2px solid var(--key);vertical-align:middle;margin-right:6px}
+.sheet-chart{position:relative}
+.sheet-chart svg{display:block;width:100%;height:auto;overflow:visible}
+.sheet-chart .grid{stroke:#e3ecee;stroke-width:1}
+.sheet-chart .axis{font:10px system-ui,sans-serif;fill:#58717a}
+.sheet-chart .end-label{font:600 11px system-ui,sans-serif;fill:var(--ink)}
+.sheet-chart .line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.sheet-chart .dot{stroke:white;stroke-width:2}
+.sheet-chart .crosshair{stroke:#9fb1b8;stroke-width:1}
+.sheet-chart .overlay{fill:transparent;cursor:crosshair;outline:none}
+.sheet-chart .overlay:focus-visible{stroke:var(--teal);stroke-width:1}
+.sheet-tooltip{position:absolute;top:0;background:#173f4c;color:white;font-size:11px;padding:8px 10px;border-radius:5px;pointer-events:none;white-space:nowrap;line-height:1.6;z-index:1}
+.sheet-tooltip b{display:block;font-size:12px}
+.sheet-tooltip i{display:inline-block;width:12px;border-top:2px solid;vertical-align:middle;margin-right:6px}
+.sheet-tooltip span{color:#c5d6db;margin-left:4px}
+.sheet-bars{display:grid;gap:2px}
+.bar-row{display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:10px;align-items:center;font-size:11px;padding:5px 6px;border-radius:5px;text-align:left;width:100%}
+.bar-row:hover,.bar-row:focus-visible{background:var(--paper)}
+button.bar-row{cursor:pointer}
+button.bar-row .bar-label{color:var(--teal)}
+.bar-track{height:12px}
+.bar{display:block;height:100%;background:var(--territory);border-radius:0 4px 4px 0;min-width:2px}
+.bar-value{font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar-value small{color:var(--muted);margin-left:4px;font-size:10px}
+.sheet-list{list-style:none;padding:0;margin:0;font-size:11px}
+.sheet-list li{padding:8px 0;border-bottom:1px solid var(--line);line-height:1.5}
+.sheet-list a{color:var(--teal)}
+.sheet details{margin-top:8px;font-size:11px}
+.sheet summary{cursor:pointer;color:var(--teal)}
+.sheet table{width:100%;border-collapse:collapse;margin-top:8px;font-variant-numeric:tabular-nums}
+.sheet th,.sheet td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;font-weight:400}
+.sheet th{color:var(--muted)}
+.sheet th:first-child,.sheet td:first-child{text-align:left}
+.sheet-actions{display:flex;gap:10px;margin-top:26px}
+.popup-sheet{margin-top:6px;font-size:12px;color:var(--teal);font-weight:600;padding:0}
+@media(prefers-reduced-motion:reduce){.sheet{animation:none}}
+@media(max-width:600px){.sheet{padding:18px 16px}.sheet-tiles{grid-template-columns:1fr 1fr}.sheet-tiles article:last-child{grid-column:span 2}}
+/* Impression / PDF : seule la fiche est imprimée, tableau des données compris. */
+@media print{body>*:not(#sheet){display:none!important}.sheet{position:static;width:auto;height:auto;overflow:visible;box-shadow:none;border:0;animation:none}.sheet-close,.sheet-actions,.sheet summary{display:none}}

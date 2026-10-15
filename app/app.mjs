@@ -1,5 +1,5 @@
 import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,filtersToQuery,filtersFromQuery,CHORO,departmentClass,
-  rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION} from './stats.mjs';
+  rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION,territorySheet} from './stats.mjs';
 const started=performance.now();
 const $=id=>document.getElementById(id);
 const fmt=new Intl.NumberFormat('fr-FR');
@@ -38,6 +38,7 @@ function applyQuery(){
   if($('department').value!==f.dep)f.dep=$('department').value='';  // département sans aucune entrée
   setMeasure(shared.measure);
   switchMode(shared.mode);
+  sheet=shared.sheet;  // la fiche partagée s'affiche au premier calcul (update)
 }
 // Bouton « Nombre d'entrées / Pour 10 000 habitants » : change le classement et la carte des départements.
 function setMeasure(next){
@@ -48,7 +49,7 @@ function setMeasure(next){
 }
 // … et à chaque changement, on réécrit l'adresse (sans ajouter d'étape au bouton « Précédent »).
 function syncQuery(){
-  const query=filtersToQuery(f,mode,data.audit,measure);
+  const query=filtersToQuery(f,mode,data.audit,measure,sheet);
   history.replaceState(null,'',query?`?${query}`:location.pathname);
 }
 
@@ -67,6 +68,7 @@ function update(){
   if(ready) updateSources();
   $('performance').textContent=`Filtres calculés en ${Math.round(performance.now()-t)} ms · ${num(data.audit.valid_rows)} entrées Licitor`;
   window.atlasState={filters:{...f},summary,mode,filteredIds:current.map(r=>r.id),ready,basemapLoaded};
+  if(sheet)renderSheet();  // la fiche ouverte suit les filtres de période et de catégorie
   syncQuery();
 }
 
@@ -91,7 +93,7 @@ function renderRanking(){
     const li=document.createElement('li'),button=document.createElement('button');
     button.title=`Explorer ${label} · ${num(count)} entrées${isRate?` · ${rateText(value)}`:''}`;
     button.innerHTML=`<span class="rank-number">${String(i+1).padStart(2,'0')}</span><span class="rank-name">${esc(label)}</span><span class="rank-count">${isRate?fmtRate.format(value):num(value)}</span><span class="rank-bar" style="width:${value/items[0][1]*75}%"></span>`;
-    button.onclick=()=>focusTerritory(code,rank);li.append(button);$('ranking').append(li);
+    const kind=rank;button.onclick=()=>{focusTerritory(code,kind);openSheet(kind,code);};li.append(button);$('ranking').append(li);
   });
 }
 
@@ -297,7 +299,7 @@ function attachMapEvents(){
       .setHTML(`<h3>${esc(feature.properties.nom)} · ${esc(code)}</h3><p><strong>${num(count)} entrées</strong> · ${rateText(rate(count,data.departmentPopulation[code]))}<br>${pct(count,summary.total)} de la sélection nationale observée${f.dep||f.search?' (filtres actifs)':''}</p>`).addTo(map);
   });
   map.on('mouseleave','department-fill',()=>{hover?.remove();map.getCanvas().style.cursor='';});
-  map.on('click','department-fill',e=>{if(mode==='departments')focusTerritory(e.features[0].properties.code,'dep');});
+  map.on('click','department-fill',e=>{if(mode==='departments'){const code=e.features[0].properties.code;focusTerritory(code,'dep');openSheet('dep',code);}});
 }
 
 function showPoint(feature){
@@ -309,7 +311,115 @@ function showPoint(feature){
   const html=`<h3>${esc(title)}</h3><p><strong>${num(records.length)} entrée${records.length>1?'s':''} à cette position</strong></p>${approx?`<span class="approx-badge">${precision==='rue'?'Rue ou lieu-dit approximatif':'Localisation communale approximative — adresse exacte non connue'}</span>`:'<p>Correspondance à l’adresse acceptée · précision cadastrale non établie.</p>'}
     ${records.slice(0,30).map(r=>`<div class="popup-record"><strong>${esc(data.natures[r.nature])}</strong> · ${r.dateAnomaly?'Date à vérifier':new Date(r.date).toLocaleDateString('fr-FR',{timeZone:'Europe/Paris'})}<p>${esc(data.addresses[r.address]||'Adresse absente')}<br>${esc(data.organizers[r.organizer])}</p>${r.similar?'<p>Plusieurs entrées partagent cette annonce ; les lots sont conservés.</p>':''}<a href="${esc(sourceUrl(r,data))}" target="_blank" rel="noopener noreferrer">Consulter l’annonce source ↗</a></div>`).join('')}
     ${records.length>30?`<p>${num(records.length-30)} autres entrées à cette position. L’export contient toute la sélection.</p>`:''}`;
-  popup?.remove();popup=new maplibregl.Popup({maxWidth:'350px',offset:14}).setLngLat(coordinates).setHTML(html).addTo(map);
+  const town=precision==='commune'?feature.properties.commune:'';
+  const sheetLink=town?`<button class="popup-sheet" data-town="${esc(town)}">Voir la fiche de la commune →</button>`:'';
+  popup?.remove();popup=new maplibregl.Popup({maxWidth:'350px',offset:14}).setLngLat(coordinates).setHTML(html.replace('</h3>','</h3>'+sheetLink)).addTo(map);
+  popup.getElement().querySelector('.popup-sheet')?.addEventListener('click',()=>openSheet('town',town));
+}
+
+// ---------- Fiche territoire : volet à droite avec chiffres clés, courbe, barres et audiences ----------
+let sheet=null;  // territoire affiché : {kind:'dep'|'town', code} ou null
+const fmtTick=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
+const ordinal=n=>n===1?'1er':`${n}e`;
+function openSheet(kind,code){sheet={kind,code};renderSheet();syncQuery();$('sheet-close').focus({preventScroll:true});}
+function closeSheet(){sheet=null;$('sheet').hidden=true;syncQuery();}
+
+function renderSheet(){
+  const s=territorySheet(data,f,sheet.kind,sheet.code),isDep=sheet.kind==='dep';
+  const town=data.communes[sheet.code],name=isDep?data.departments[sheet.code]:town.name;
+  $('sheet-kind').textContent=isDep?`DÉPARTEMENT ${sheet.code}`:`COMMUNE · ${data.departments[town.dep]||''} (${town.dep})`;
+  $('sheet-title').textContent=name;
+  $('sheet-scope').textContent=`${f.from}–${f.to} · ${f.category?data.categories[f.category]:'toutes catégories'} · ${num(s.population)} habitants. La période et la catégorie choisies s’appliquent à la fiche.`;
+  const ratio=s.rate!==null&&s.franceRate?s.rate/s.franceRate:null;
+  const rankText=s.rank?`<strong>${ordinal(s.rank)}</strong><small>sur ${num(s.rankOf)} ${isDep?'départements':`communes de ${num(MIN_TOWN_POPULATION)} hab. et plus`}</small>`
+    :`<strong>—</strong><small>${isDep?'non classé : aucune entrée dans la base Licitor':`non classée : moins de ${num(MIN_TOWN_POPULATION)} habitants`}</small>`;
+  const tiles=`<section class="sheet-tiles" aria-label="Chiffres clés">
+    <article><p>Entrées</p><strong>${num(s.count)}</strong><small>sur la période choisie</small></article>
+    <article><p>Pour 10 000 habitants</p><strong>${s.rate===null?'—':fmtRate.format(s.rate)}</strong><small>France : ${s.franceRate===null?'—':fmtRate.format(s.franceRate)}${ratio?` · ×${fmtRate.format(ratio)}`:''}</small></article>
+    <article><p>Rang national du taux</p>${rankText}</article></section>`;
+  const partial=f.to===data.audit.max_year?` ${f.to} est partielle.`:'';
+  const evolution=s.years.length<2
+    ?`<section class="sheet-block"><h3>Évolution pour 10 000 habitants</h3><p class="sheet-note">Choisissez une période d’au moins deux années pour voir l’évolution.</p></section>`
+    :`<section class="sheet-block"><h3>Évolution pour 10 000 habitants</h3><p class="sheet-note">Entrées de chaque année rapportées à la population, comparées à la France.${partial}</p>
+      <div class="sheet-legend"><span style="--key:var(--territory)">${esc(name)}</span><span style="--key:var(--france)">France</span></div>
+      <div class="sheet-chart" id="sheet-chart"></div>
+      <details><summary>Voir les données en tableau</summary><table><thead><tr><th>Année</th><th>Entrées</th><th>Pour 10 000 hab.</th><th>France</th></tr></thead>
+      <tbody>${s.years.map(y=>`<tr><td>${y.year}</td><td>${num(y.count)}</td><td>${y.rate===null?'—':fmtRate.format(y.rate)}</td><td>${fmtRate.format(y.franceRate)}</td></tr>`).join('')}</tbody></table></details></section>`;
+  // Une seule barre n'apprend rien : la répartition n'apparaît que s'il y a au moins deux types de biens.
+  const categories=s.categories.length<2?'':`<section class="sheet-block"><h3>Types de biens</h3><p class="sheet-note">Nombre d’entrées et part du territoire.</p>
+    <div class="sheet-bars">${barRows(s.categories.map(([key,n])=>[data.categories[key],n,pct(n,s.count)]))}</div></section>`;
+  const towns=!isDep||!s.towns.length?'':`<section class="sheet-block"><h3>Communes les plus représentées</h3><p class="sheet-note">Cliquez sur une commune pour ouvrir sa fiche.</p>
+    <div class="sheet-bars">${barRows(s.towns.slice(0,8).map(([code,n])=>[data.communes[code].name,n,pct(n,s.count),code]))}</div></section>`;
+  const next=s.upcoming.slice(0,5);
+  const upcoming=`<section class="sheet-block"><h3>Prochaines audiences</h3>${next.length?`<ul class="sheet-list">${next.map(r=>`<li><strong>${new Date(r.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})}</strong> · ${esc(data.natures[r.nature])}<br>${esc(data.organizers[r.organizer])} · <a href="${esc(sourceUrl(r,data))}" target="_blank" rel="noopener noreferrer">Annonce ↗</a></li>`).join('')}</ul>${s.upcoming.length>5?`<p class="sheet-note">et ${num(s.upcoming.length-5)} autres audiences à venir.</p>`:''}`:'<p class="sheet-note">Aucune audience à venir annoncée pour ce territoire.</p>'}</section>`;
+  $('sheet-body').innerHTML=tiles+(s.count?evolution+categories+towns:'<p class="sheet-note" style="margin-top:20px">Aucune entrée pour cette sélection. Élargissez la période ou la catégorie.</p>')+upcoming
+    +'<p class="sheet-actions"><button class="outline-button" data-action="share">Copier le lien de la fiche ⧉</button><button class="outline-button" data-action="print">Imprimer / PDF</button></p>';
+  if(s.count&&s.years.length>1)sheetLineChart(s.years,name);
+  $('sheet').hidden=false;
+}
+
+// Barres horizontales : [libellé, nombre, part, code de commune facultatif]. Avec un code, la ligne est un bouton.
+function barRows(items){
+  const max=Math.max(1,...items.map(([,n])=>n));
+  return items.map(([label,n,share,code])=>{
+    const tag=code?'button':'div',attr=code?` data-town="${esc(code)}" title="Ouvrir la fiche de ${esc(label)}"`:'';
+    return `<${tag} class="bar-row"${attr}><span class="bar-label">${esc(label)}</span><span class="bar-track"><span class="bar" style="width:${n/max*100}%"></span></span><span class="bar-value">${num(n)}<small>${share}</small></span></${tag}>`;
+  }).join('');
+}
+
+// Courbe territoire / France avec réticule : une ligne verticale suit la souris (ou les flèches du clavier)
+// et une bulle donne les deux valeurs de l'année.
+function sheetLineChart(years,name){
+  const W=480,H=210,L=34,R=52,T=12,B=26,last=years.length-1;
+  const max=Math.max(1e-6,...years.flatMap(y=>[y.rate||0,y.franceRate||0]));
+  const magnitude=10**Math.floor(Math.log10(max/4));
+  // Graduations « rondes » (1, 2, 2,5, 5…) et au plus 4 lignes, juste au-dessus de la valeur la plus haute.
+  const step=([1,2,2.5,5,10].find(v=>v*magnitude>=max/4)||10)*magnitude,lines=Math.max(1,Math.ceil(max/step-1e-9)),top=step*lines;
+  const x=i=>L+i/last*(W-L-R),y=v=>T+(1-(v||0)/top)*(H-T-B);
+  const path=key=>years.map((d,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join('');
+  // Années affichées sous l'axe : les multiples de 5, plus la première et la dernière si elles ne gênent pas.
+  const shown=years.map((d,i)=>i).filter(i=>i===0||i===last||years[i].year%5===0)
+    .filter((i,k,list)=>!(i===0&&list[1]-i<3)&&!(i===last&&i-list.at(-2)<3)||list.length<3);
+  const yT=y(years[last].rate),yF=y(years[last].franceRate),labels=Math.abs(yT-yF)>=13;
+  const partialYear=years[last].year===data.audit.max_year;
+  $('sheet-chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Évolution pour 10 000 habitants de ${esc(name)} et de la France, ${years[0].year} à ${years[last].year}. Données détaillées dans le tableau ci-dessous.">
+    ${Array.from({length:lines+1},(_,k)=>k).map(k=>`<line class="grid" x1="${L}" x2="${W-R}" y1="${y(k*step)}" y2="${y(k*step)}"/><text class="axis" x="${L-6}" y="${y(k*step)+3}" text-anchor="end">${fmtTick.format(k*step)}</text>`).join('')}
+    ${shown.map(i=>`<text class="axis" x="${x(i)}" y="${H-8}" text-anchor="middle">${years[i].year}</text>`).join('')}
+    <line class="crosshair" x1="0" x2="0" y1="${T}" y2="${H-B}" visibility="hidden"/>
+    <path class="line" d="${path('franceRate')}" stroke="var(--france)"/><path class="line" d="${path('rate')}" stroke="var(--territory)"/>
+    ${[['france',yF],['territory',yT]].map(([key,cy])=>partialYear
+      // Année partielle : point creux, comme sur la courbe annuelle d'ATLAS.
+      ?`<circle cx="${x(last)}" cy="${cy}" r="4" fill="white" stroke="var(--${key})" stroke-width="2"/>`
+      :`<circle class="dot" cx="${x(last)}" cy="${cy}" r="4" fill="var(--${key})"/>`).join('')}
+    ${labels?`<text class="end-label" x="${x(last)+8}" y="${yT+4}">${fmtRate.format(years[last].rate||0)}</text><text class="end-label" x="${x(last)+8}" y="${yF+4}">${fmtRate.format(years[last].franceRate)}</text>`:''}
+    <rect class="overlay" x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" tabindex="0" aria-label="Parcourir les années avec les flèches gauche et droite"/>
+  </svg><div class="sheet-tooltip" role="status" hidden></div>`;
+  const svg=$('sheet-chart').querySelector('svg'),overlay=svg.querySelector('.overlay'),cross=svg.querySelector('.crosshair'),tip=$('sheet-chart').querySelector('.sheet-tooltip');
+  let current=last;
+  const show=i=>{
+    current=Math.max(0,Math.min(last,i));const d=years[current],scale=svg.getBoundingClientRect().width/W;
+    cross.setAttribute('x1',x(current));cross.setAttribute('x2',x(current));cross.setAttribute('visibility','visible');
+    // Contenu inséré en texte (jamais en HTML) : les valeurs d'abord, puis le nom de la série.
+    const row=(color,value,label)=>{const p=document.createElement('div'),key=document.createElement('i'),strong=document.createElement('strong'),span=document.createElement('span');
+      key.style.borderColor=color;strong.textContent=value;span.textContent=label;p.append(key,strong,span);return p;};
+    const title=document.createElement('b');title.textContent=`${d.year}${d.year===data.audit.max_year?' (partielle)':''}`;
+    tip.replaceChildren(title,row('var(--territory)',d.rate===null?'—':fmtRate.format(d.rate),`${name} · ${num(d.count)} entrées`),row('var(--france)',fmtRate.format(d.franceRate),'France'));
+    tip.hidden=false;
+    const px=x(current)*scale,width=tip.offsetWidth;
+    tip.style.left=`${px+width+14>svg.clientWidth?px-width-12:px+12}px`;
+  };
+  const hide=()=>{tip.hidden=true;cross.setAttribute('visibility','hidden');};
+  overlay.onpointermove=e=>{const rect=svg.getBoundingClientRect(),scale=rect.width/W;show(Math.round(((e.clientX-rect.left)/scale-L)/(W-L-R)*last));};
+  overlay.onpointerleave=hide;overlay.onblur=hide;overlay.onfocus=()=>show(current);
+  overlay.onkeydown=e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();show(current+(e.key==='ArrowRight'?1:-1));}};
+}
+
+// Copie l'adresse de la page (avec ses filtres et sa fiche) et le signale sur le bouton.
+async function copyLink(button){
+  const label=button.textContent;
+  try{await navigator.clipboard.writeText(location.href);button.textContent='Lien copié ✓';}
+  catch{prompt('Copiez ce lien :',location.href);}  // presse-papiers refusé : on affiche le lien
+  setTimeout(()=>{button.textContent=label;},2000);
 }
 
 function renderMethod(pilot,anomalies){
@@ -343,6 +453,8 @@ function renderMethod(pilot,anomalies){
       <li><strong>Départements :</strong> plus la couleur est foncée, plus le département compte d’entrées. Les mêmes seuils de couleur sont utilisés pour tous les filtres.</li>
     </ul>
     <p>Les pourcentages sont calculés sur toutes les entrées sélectionnées. Les chiffres décrivent uniquement la base Licitor.</p>
+    <h3>Fiches territoire</h3>
+    <p>Un clic sur un territoire du classement, sur un département (mode Départements) ou sur « Voir la fiche de la commune » ouvre sa fiche : chiffres clés, évolution annuelle pour 10 000 habitants comparée à la France, types de biens, communes principales et prochaines audiences. La fiche applique la période et la catégorie choisies ; les audiences à venir sont listées quelle que soit la période. Son lien peut être copié et elle peut être imprimée en PDF.</p>
     <h3>Taux pour 10 000 habitants</h3>
     <p>Le bouton « Pour 10 000 habitants » rapporte le nombre d’entrées de la sélection à la population : <strong>taux = entrées ÷ population × 10 000</strong>, sur toute la période choisie. Il permet de comparer des territoires de tailles différentes.</p>
     <ul>
@@ -372,11 +484,17 @@ function wire(){
   $('department').onchange=()=>{f.dep=$('department').value;update();if(f.dep)focusTerritory(f.dep,'dep');};
   $('search').oninput=()=>{clearTimeout(queued);queued=setTimeout(()=>{f.search=$('search').value;update();},140);};
   $('search').onchange=()=>focusSearch($('search').value);
-  $('share').onclick=async()=>{
-    try{await navigator.clipboard.writeText(location.href);$('share').textContent='Lien copié ✓';}
-    catch{prompt('Copiez ce lien :',location.href);}  // presse-papiers refusé : on affiche le lien
-    setTimeout(()=>{$('share').textContent='Copier le lien ⧉';},2000);
+  $('share').onclick=()=>copyLink($('share'));
+  // Fiche territoire : fermeture (bouton ou Échap), clics dans la fiche, impression complète.
+  $('sheet-close').onclick=closeSheet;
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sheet&&!$('method-dialog').open)closeSheet();});
+  $('sheet-body').onclick=e=>{
+    const target=e.target.closest('[data-town],[data-action]');if(!target)return;
+    if(target.dataset.town){focusTerritory(target.dataset.town,'town');openSheet('town',target.dataset.town);}
+    else if(target.dataset.action==='share')copyLink(target);
+    else if(target.dataset.action==='print')print();
   };
+  addEventListener('beforeprint',()=>$('sheet').querySelectorAll('details').forEach(d=>{d.open=true;}));
   $('reset').onclick=()=>{clearTimeout(queued);Object.assign(f,{from:data.audit.min_year,to:data.audit.max_year,category:'',dep:'',search:'',includeUndated:true});$('from').value=f.from;$('to').value=f.to;$('category').value=$('department').value=$('search').value='';update();$('annual-chart').scrollLeft=0;map?.flyTo({center:[2.7,46.55],zoom:4.8,duration:reduceMotion?0:700});};
   document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>switchMode(button.dataset.mode));
   for(const m of ['count','rate'])$('measure-'+m).onclick=()=>setMeasure(m);

@@ -65,10 +65,45 @@ export function quantileClass(value, thresholds) {
   return 1 + thresholds.filter(t => value >= t).length;
 }
 
+// Fiche territoire : les chiffres d'un département (kind 'dep') ou d'une commune (kind 'town')
+// pour la sélection en cours. Période et catégorie s'appliquent ; le territoire remplace les filtres
+// « département » et « recherche ». Les taux de la France utilisent la même population totale.
+export function territorySheet(data, f, kind, code) {
+  const all = selectRecords(data.records, {...f, dep: '', search: ''}, data.communes, data.departments);
+  const inTerritory = r => kind === 'dep' ? r.dep === code : r.commune === code;
+  const inside = all.filter(inTerritory);
+  const townPopulations = Object.fromEntries(Object.entries(data.communes).map(([c, t]) => [c, t.population]));
+  const population = kind === 'dep' ? data.departmentPopulation[code] : townPopulations[code];
+  const francePopulation = Object.values(data.departmentPopulation).reduce((a, b) => a + b, 0);
+  const own = summarize(inside), france = summarize(all);
+  const years = [];
+  for (let year = f.from; year <= f.to; year++) {
+    const count = own.years[year] || 0;
+    years.push({year, count, rate: rate(count, population), franceRate: rate(france.years[year] || 0, francePopulation)});
+  }
+  const categories = {};
+  for (const r of inside) categories[r.category] = (categories[r.category] || 0) + 1;
+  // Rang du taux parmi les départements présents dans la base (pas les territoires que Licitor ne couvre pas),
+  // ou parmi les communes d'au moins MIN_TOWN_POPULATION habitants.
+  const covered = new Set(data.records.map(r => r.dep));
+  const depPopulations = Object.fromEntries(Object.entries(data.departmentPopulation).filter(([d]) => covered.has(d)));
+  const ranked = kind === 'dep' ? rateRank(france.deps, depPopulations)
+    : population >= MIN_TOWN_POPULATION ? rateRank(france.towns, townPopulations, MIN_TOWN_POPULATION) : [];
+  const position = ranked.findIndex(([c]) => c === code) + 1;
+  return {kind, code, population, count: inside.length, rate: rate(inside.length, population),
+    franceRate: rate(all.length, francePopulation), rank: position || null, rankOf: ranked.length, years,
+    categories: Object.entries(categories).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+    towns: kind === 'dep' ? own.townRank : [],
+    // Audiences à venir du territoire, quelle que soit la période choisie (catégorie respectée).
+    upcoming: data.records.filter(r => r.upcoming && inTerritory(r) && (!f.category || r.category === f.category))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))};
+}
+
 // Lien partageable : les filtres et le mode de carte sont écrits dans l'adresse de la page
 // (ex. ?debut=2015&departement=93&mode=points). Les valeurs par défaut ne sont pas écrites.
 const MODE_NAMES = {heat:'chaleur', points:'points', departments:'departements'};
-export function filtersToQuery(f, mode, audit, measure = 'count') {
+const SHEET_NAMES = {dep: 'departement', town: 'commune'};
+export function filtersToQuery(f, mode, audit, measure = 'count', sheet = null) {
   const p = new URLSearchParams();
   if (f.from !== audit.min_year) p.set('debut', f.from);
   if (f.to !== audit.max_year) p.set('fin', f.to);
@@ -77,6 +112,7 @@ export function filtersToQuery(f, mode, audit, measure = 'count') {
   if (f.search) p.set('recherche', f.search);
   if (mode !== 'heat') p.set('mode', MODE_NAMES[mode]);
   if (measure === 'rate') p.set('mesure', 'taux');
+  if (sheet) p.set('fiche', `${SHEET_NAMES[sheet.kind]}-${sheet.code}`);  // ex. fiche=departement-93
   return p.toString();
 }
 // Lit une adresse partagée. Toute valeur inconnue ou impossible est ignorée (valeur par défaut).
@@ -87,7 +123,11 @@ export function filtersFromQuery(query, data) {
   if (from > to) [from, to] = [to, from];
   const known = (table, value) => value !== null && Object.hasOwn(table, value) ? value : '';
   const mode = Object.keys(MODE_NAMES).find(k => MODE_NAMES[k] === p.get('mode')) || 'heat';
-  return {mode, measure: p.get('mesure') === 'taux' ? 'rate' : 'count', filters: {from, to, category: known(data.categories, p.get('categorie')),
+  const [sheetName, sheetCode] = (p.get('fiche') || '').split('-');
+  const sheetKind = Object.keys(SHEET_NAMES).find(k => SHEET_NAMES[k] === sheetName);
+  const sheetTable = sheetKind === 'dep' ? data.departmentPopulation : data.communes;
+  const sheet = sheetKind && known(sheetTable, sheetCode ?? null) ? {kind: sheetKind, code: sheetCode} : null;
+  return {mode, sheet, measure: p.get('mesure') === 'taux' ? 'rate' : 'count', filters: {from, to, category: known(data.categories, p.get('categorie')),
     dep: known(data.departments, p.get('departement')), search: (p.get('recherche') || '').trim().slice(0, 100)}};
 }
 export const CHORO = [0,1,50,150,300,600,1200];
