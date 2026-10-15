@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {selectRecords,summarize,groupedPoints,departmentClass,exportTable,EXPORT_HEADER,filtersToQuery,filtersFromQuery,rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION,territorySheet} from '../app/stats.mjs';
+import {selectRecords,summarize,groupedPoints,departmentClass,exportTable,EXPORT_HEADER,filtersToQuery,filtersFromQuery,rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION,territorySheet,periodYears} from '../app/stats.mjs';
 const data=JSON.parse(readFileSync(new URL('../app/data/atlas.json',import.meta.url)));
 const aggregates=JSON.parse(readFileSync(new URL('../reports/aggregates.json',import.meta.url)));
 const base={from:data.audit.min_year,to:data.audit.max_year,category:'',dep:'',search:'',includeUndated:true};
@@ -55,7 +55,9 @@ for(const bad of ['?debut=1800','?fin=3000','?debut=abc','?debut=2010.5','?categ
 assert.deepEqual(filtersFromQuery('?debut=2020&fin=2010',data).filters.from,2010);  // années inversées : remises dans l'ordre
 assert.equal(filtersFromQuery('?recherche='+'x'.repeat(500),data).filters.search.length,100);
 // Taux pour 10 000 habitants.
-assert.equal(rate(5,10000),5);assert.equal(rate(3,0),null);assert.equal(rate(3,undefined),null);
+assert.equal(rate(5,10000),5);assert.equal(rate(28,10000,28),1);assert.equal(rate(3,100,0),null);  // taux annuel moyen
+assert.deepEqual(rateRank({a:20},{a:10000},1,10),[['a',2]]);assert.equal(periodYears({from:2015,to:2024}),10);
+assert.equal(rate(3,0),null);assert.equal(rate(3,undefined),null);
 const all=summarize(data.records);
 const depRates=rateRank(all.deps,data.departmentPopulation);
 assert.ok(depRates.every(([code,value])=>Math.abs(value-(all.deps[code]||0)/data.departmentPopulation[code]*1e4)<1e-9));
@@ -88,8 +90,8 @@ for(const f of [base,{...base,from:2015,to:2024,includeUndated:false},{...base,c
     assert.equal(s.years.reduce((n,y)=>n+y.count,0)+undated,s.count);
     assert.equal(s.years.length,f.to-f.from+1);
     const pop=kind==='dep'?data.departmentPopulation[code]:data.communes[code].population;
-    assert.ok(Math.abs(s.rate-s.count/pop*1e4)<1e-9);
-    assert.ok(Math.abs(s.franceRate-selectRecords(data.records,f,data.communes,data.departments).length/francePop*1e4)<1e-9);
+    assert.ok(Math.abs(s.rate-s.count/pop*1e4/(f.to-f.from+1))<1e-9);
+    assert.ok(Math.abs(s.franceRate-selectRecords(data.records,f,data.communes,data.departments).length/francePop*1e4/(f.to-f.from+1))<1e-9);
     // Un département absent de toute la base (ex. Corse-du-Sud) n'a pas de rang.
     if(kind==='dep'){assert.ok(data.records.some(r=>r.dep===code)?s.rank>=1&&s.rank<=s.rankOf:s.rank===null,code);assert.equal(s.towns.reduce((n,[,c])=>n+c,0)+expected.filter(r=>!r.commune).length,s.count);}
     assert.ok(s.upcoming.every(r=>r.upcoming&&(kind==='dep'?r.dep===code:r.commune===code)));

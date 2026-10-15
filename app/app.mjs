@@ -1,5 +1,5 @@
 import {selectRecords,summarize,groupedPoints,exportTable,sourceUrl,filtersToQuery,filtersFromQuery,CHORO,departmentClass,
-  rate,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION,territorySheet} from './stats.mjs';
+  rate,periodYears,rateRank,quantileThresholds,quantileClass,MIN_TOWN_POPULATION,territorySheet} from './stats.mjs';
 const started=performance.now();
 const $=id=>document.getElementById(id);
 const fmt=new Intl.NumberFormat('fr-FR');
@@ -9,9 +9,11 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const colors=['#e7edef','#d0e8ec','#97cbd3','#58a9b8','#298394','#166176','#123f55'];
 const f={from:null,to:null,category:'',dep:'',search:'',includeUndated:true};  // période remplie par populate() à partir des données
 let data,departments,map,current,summary,mode='heat',rank='dep',popup,hover,ready=false,queued;
-let measure='count',rateThresholds=[];  // mesure : 'count' (nombre d'entrées) ou 'rate' (pour 10 000 habitants)
-const fmtRate=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
-const rateText=x=>x===null?'population inconnue':`${fmtRate.format(x)} pour 10 000 hab.`;
+let measure='count',rateThresholds=[];  // mesure : 'count' (nombre d'entrées) ou 'rate' (entrées par an pour 10 000 habitants)
+// Taux annuels : petites valeurs (ex. 1,38), d'où 2 décimales ; le rapport à la France garde 1 décimale.
+const fmtRate=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtRatio=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
+const rateText=x=>x===null?'population inconnue':`${fmtRate.format(x)} par an pour 10 000 hab.`;
 let rendered=false,basemapLoaded=false,baseErrors=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const getJSON=async path=>{const response=await fetch(path);if(!response.ok)throw Error(`${path} : HTTP ${response.status}`);return response.json();};
@@ -40,7 +42,7 @@ function applyQuery(){
   switchMode(shared.mode);
   sheet=shared.sheet;  // la fiche partagée s'affiche au premier calcul (update)
 }
-// Bouton « Nombre d'entrées / Pour 10 000 habitants » : change le classement et la carte des départements.
+// Bouton « Nombre d'entrées / Par an pour 10 000 hab. » : change le classement et la carte des départements.
 function setMeasure(next){
   measure=next;
   for(const m of ['count','rate'])$('measure-'+m).setAttribute('aria-pressed',String(m===measure));
@@ -77,13 +79,13 @@ let townPopulations;
 function rankingItems(){
   if(measure==='count')return rank==='dep'?summary.depRank:summary.townRank;
   townPopulations??=Object.fromEntries(Object.entries(data.communes).map(([code,c])=>[code,c.population]));
-  const ranked=rank==='dep'?rateRank(summary.deps,data.departmentPopulation):rateRank(summary.towns,townPopulations,MIN_TOWN_POPULATION);
+  const ranked=rank==='dep'?rateRank(summary.deps,data.departmentPopulation,1,periodYears(f)):rateRank(summary.towns,townPopulations,MIN_TOWN_POPULATION,periodYears(f));
   return ranked.filter(([,value])=>value>0);
 }
 function renderRanking(){
   const items=rankingItems().slice(0,10),isRate=measure==='rate';
   $('ranking-subtitle').textContent=isRate
-    ?`Top 10 · pour 10 000 habitants${rank==='town'?` · communes de ${num(MIN_TOWN_POPULATION)} habitants et plus`:''}`
+    ?`Top 10 · entrées par an pour 10 000 habitants${rank==='town'?` · communes de ${num(MIN_TOWN_POPULATION)} habitants et plus`:''}`
     :'Top 10 · sélection active';
   $('ranking').replaceChildren();
   if(!items.length){const li=document.createElement('li');li.className='empty-state';li.textContent='Aucun territoire identifié pour cette sélection. Ajustez les filtres.';$('ranking').append(li);}
@@ -238,7 +240,7 @@ function updateSources(){
 }
 // Couleur des départements : seuils fixes pour le nombre, 6 groupes de même taille pour le taux.
 function colorDepartments(){
-  const depRate=code=>rate(summary.deps[code]||0,data.departmentPopulation[code]);
+  const depRate=code=>rate(summary.deps[code]||0,data.departmentPopulation[code],periodYears(f));
   rateThresholds=quantileThresholds(departments.features.map(feature=>depRate(feature.properties.code)));
   departments.features.forEach(feature=>{
     const code=feature.properties.code,count=summary.deps[code]||0;
@@ -270,8 +272,8 @@ function renderLegend(){
     // Légende fabriquée à partir des seuils réellement calculés pour la sélection.
     const t=rateThresholds.map(x=>fmtRate.format(x));
     const labels=['Aucune entrée',...(t.length?[`moins de ${t[0]}`,...t.slice(1).map((x,i)=>`${t[i]} à ${x}`),`${t.at(-1)} et plus`]:[])];
-    $('legend').innerHTML=`<strong>Entrées pour 10 000 habitants</strong>${labels.map((label,i)=>`<div class="legend-item"><span class="swatch" style="background:${colors[i]}"></span>${label}</div>`).join('')}<p>6 groupes de départements de même taille, recalculés pour chaque sélection.<br>Population municipale INSEE.</p>`;
-    $('map-note').textContent=`Taux = entrées de la sélection ÷ population × 10 000, sur la période ${f.from}–${f.to}. ${num(summary.unknownDep)} entrées non attribuées à un département.`;
+    $('legend').innerHTML=`<strong>Entrées par an pour 10 000 habitants</strong>${labels.map((label,i)=>`<div class="legend-item"><span class="swatch" style="background:${colors[i]}"></span>${label}</div>`).join('')}<p>6 groupes de départements de même taille, recalculés pour chaque sélection.<br>Population municipale INSEE.</p>`;
+    $('map-note').textContent=`Taux annuel moyen = entrées de la sélection ÷ ${num(periodYears(f))} année${periodYears(f)>1?'s':''} (${f.from}–${f.to}) ÷ population × 10 000. ${num(summary.unknownDep)} entrées non attribuées à un département.`;
   }else{
     // Textes de la légende fabriqués à partir des seuils de couleur (CHORO), pour qu'ils restent toujours d'accord.
     const labels=CHORO.map((n,i)=>i===0?'0':i===CHORO.length-1?`≥ ${num(n)}`:`${num(n)}–${num(CHORO[i+1]-1)}`);
@@ -296,7 +298,7 @@ function attachMapEvents(){
     map.getCanvas().style.cursor='pointer';
     const feature=e.features[0],code=feature.properties.code,count=summary.deps[code]||0;
     hover?.remove();hover=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:12}).setLngLat(e.lngLat)
-      .setHTML(`<h3>${esc(feature.properties.nom)} · ${esc(code)}</h3><p><strong>${num(count)} entrées</strong> · ${rateText(rate(count,data.departmentPopulation[code]))}<br>${pct(count,summary.total)} de la sélection nationale observée${f.dep||f.search?' (filtres actifs)':''}</p>`).addTo(map);
+      .setHTML(`<h3>${esc(feature.properties.nom)} · ${esc(code)}</h3><p><strong>${num(count)} entrées</strong> · ${rateText(rate(count,data.departmentPopulation[code],periodYears(f)))}<br>${pct(count,summary.total)} de la sélection nationale observée${f.dep||f.search?' (filtres actifs)':''}</p>`).addTo(map);
   });
   map.on('mouseleave','department-fill',()=>{hover?.remove();map.getCanvas().style.cursor='';});
   map.on('click','department-fill',e=>{if(mode==='departments'){const code=e.features[0].properties.code;focusTerritory(code,'dep');openSheet('dep',code);}});
@@ -335,12 +337,12 @@ function renderSheet(){
     :`<strong>—</strong><small>${isDep?'non classé : aucune entrée dans la base Licitor':`non classée : moins de ${num(MIN_TOWN_POPULATION)} habitants`}</small>`;
   const tiles=`<section class="sheet-tiles" aria-label="Chiffres clés">
     <article><p>Entrées</p><strong>${num(s.count)}</strong><small>sur la période choisie</small></article>
-    <article><p>Pour 10 000 habitants</p><strong>${s.rate===null?'—':fmtRate.format(s.rate)}</strong><small>France : ${s.franceRate===null?'—':fmtRate.format(s.franceRate)}${ratio?` · ×${fmtRate.format(ratio)}`:''}</small></article>
+    <article><p>Par an pour 10 000 hab.</p><strong>${s.rate===null?'—':fmtRate.format(s.rate)}</strong><small>France : ${s.franceRate===null?'—':fmtRate.format(s.franceRate)}${ratio?` · ×${fmtRatio.format(ratio)}`:''}</small></article>
     <article><p>Rang national du taux</p>${rankText}</article></section>`;
   const partial=f.to===data.audit.max_year?` ${f.to} est partielle.`:'';
   const evolution=s.years.length<2
-    ?`<section class="sheet-block"><h3>Évolution pour 10 000 habitants</h3><p class="sheet-note">Choisissez une période d’au moins deux années pour voir l’évolution.</p></section>`
-    :`<section class="sheet-block"><h3>Évolution pour 10 000 habitants</h3><p class="sheet-note">Entrées de chaque année rapportées à la population, comparées à la France.${partial}</p>
+    ?`<section class="sheet-block"><h3>Évolution annuelle pour 10 000 habitants</h3><p class="sheet-note">Choisissez une période d’au moins deux années pour voir l’évolution.</p></section>`
+    :`<section class="sheet-block"><h3>Évolution annuelle pour 10 000 habitants</h3><p class="sheet-note">Entrées de chaque année rapportées à la population, comparées à la France.${partial}</p>
       <div class="sheet-legend"><span style="--key:var(--territory)">${esc(name)}</span><span style="--key:var(--france)">France</span></div>
       <div class="sheet-chart" id="sheet-chart"></div>
       <details><summary>Voir les données en tableau</summary><table><thead><tr><th>Année</th><th>Entrées</th><th>Pour 10 000 hab.</th><th>France</th></tr></thead>
@@ -456,7 +458,7 @@ function renderMethod(pilot,anomalies){
     <h3>Fiches territoire</h3>
     <p>Un clic sur un territoire du classement, sur un département (mode Départements) ou sur « Voir la fiche de la commune » ouvre sa fiche : chiffres clés, évolution annuelle pour 10 000 habitants comparée à la France, types de biens, communes principales et prochaines audiences. La fiche applique la période et la catégorie choisies ; les audiences à venir sont listées quelle que soit la période. Son lien peut être copié et elle peut être imprimée en PDF.</p>
     <h3>Taux pour 10 000 habitants</h3>
-    <p>Le bouton « Pour 10 000 habitants » rapporte le nombre d’entrées de la sélection à la population : <strong>taux = entrées ÷ population × 10 000</strong>, sur toute la période choisie. Il permet de comparer des territoires de tailles différentes.</p>
+    <p>Le bouton « Par an pour 10 000 hab. » rapporte le nombre d’entrées de la sélection à la population et à la durée de la période : <strong>taux annuel moyen = entrées de la période ÷ nombre d’années ÷ population × 10 000</strong>. Il permet de comparer des territoires de tailles différentes, et des périodes de durées différentes. La courbe des fiches donne le taux de chaque année.</p>
     <ul>
       <li>Population : ${esc(a.population_source)} (${num(a.population_total)} habitants au total). ${esc(a.population_note)} La population d’un département est la somme de celle de ses communes. Elle est la même pour toutes les années : un taux sur plusieurs années ne tient pas compte de l’évolution de la population.</li>
       <li>Le classement des communes ne retient que celles d’au moins ${num(MIN_TOWN_POPULATION)} habitants : dans une très petite commune, une ou deux ventes suffisent à produire un taux très élevé mais peu significatif.</li>

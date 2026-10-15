@@ -47,10 +47,13 @@ export function exportTable(records, data) {
 // Une commune trop peu peuplée donne un taux trompeur (2 ventes dans un village de 40 habitants
 // = 500 pour 10 000) : le classement des communes ne retient que celles d'au moins 5 000 habitants.
 export const MIN_TOWN_POPULATION = 5000;
-export const rate = (count, population) => population > 0 ? count / population * 10000 : null;
-export function rateRank(counts, populations, minPopulation = 1) {
+// Taux annuel moyen : sur une période de plusieurs années, on divise par le nombre d'années (years),
+// pour qu'un taux sur 5 ans et un taux sur 20 ans restent comparables.
+export const rate = (count, population, years = 1) => population > 0 && years > 0 ? count / years / population * 10000 : null;
+export const periodYears = f => f.to - f.from + 1;
+export function rateRank(counts, populations, minPopulation = 1, years = 1) {
   return Object.entries(populations).filter(([, p]) => p >= minPopulation)
-    .map(([code, p]) => [code, rate(counts[code] || 0, p)])
+    .map(([code, p]) => [code, rate(counts[code] || 0, p, years)])
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 // Couleurs de la carte en mode taux : 6 groupes de même taille parmi les territoires ayant au moins
@@ -90,8 +93,9 @@ export function territorySheet(data, f, kind, code) {
   const ranked = kind === 'dep' ? rateRank(france.deps, depPopulations)
     : population >= MIN_TOWN_POPULATION ? rateRank(france.towns, townPopulations, MIN_TOWN_POPULATION) : [];
   const position = ranked.findIndex(([c]) => c === code) + 1;
-  return {kind, code, population, count: inside.length, rate: rate(inside.length, population),
-    franceRate: rate(all.length, francePopulation), rank: position || null, rankOf: ranked.length, years,
+  const n = periodYears(f);  // taux annuels moyens sur la période ; ceux de la courbe sont déjà annuels
+  return {kind, code, population, count: inside.length, rate: rate(inside.length, population, n),
+    franceRate: rate(all.length, francePopulation, n), rank: position || null, rankOf: ranked.length, years,
     categories: Object.entries(categories).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
     towns: kind === 'dep' ? own.townRank : [],
     // Audiences à venir du territoire, quelle que soit la période choisie (catégorie respectée).
